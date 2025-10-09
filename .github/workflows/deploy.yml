@@ -1,0 +1,47 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    permissions:
+      contents: 'read'
+      id-token: 'write'   # needed for Workload Identity Federation
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: us-east4
+      SERVICE: finance-onboard
+      RUNTIME_SA: finance-onboard-sa
+      GCS_BUCKET: pfi-datalake
+      USER_ID: default
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      # Build & deploy from source via Cloud Build (no Dockerfile needed, but you have one)
+      - name: Deploy Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source . \
+            --region "$REGION" \
+            --service-account "${RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --set-env-vars "GCS_BUCKET=${GCS_BUCKET},USER_ID=${USER_ID}" \
+            --min-instances=0 \
+            --memory=512Mi \
+            --allow-unauthenticated
+
