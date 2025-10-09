@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>PFI | Onboarding</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+      h1 { margin: 0 0 1rem; font-size: 1.4rem; }
+      .group { border:1px solid #e5e7eb; border-radius:12px; padding:1rem; margin-bottom:1rem; max-width:900px;}
+      .row { display:grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap:.5rem; margin-bottom:.5rem; align-items:center; }
+      .row.debts { grid-template-columns: 2fr 1fr 1fr 1fr 0.5fr; }
+      .row.accounts { grid-template-columns: 2fr 1fr; }
+      label { font-size:.9rem; color:#374151; }
+      input, select, textarea { padding:.4rem .5rem; border:1px solid #d1d5db; border-radius:8px; }
+      button.add { margin-top:.5rem; }
+      .actions { margin-top: 1rem; }
+      .help { color:#6b7280; font-size:.9rem; margin:.5rem 0 0; }
+    </style>
+  </head>
+  <body>
+    <h1>Starting Finances Questionnaire</h1>
+    <form method="post" action="/onboarding">
+      <div class="group">
+        <label>Currency</label>
+        <select name="currency">
+          <option value="EUR">EUR</option>
+          <option value="USD">USD</option>
+          <option value="GBP">GBP</option>
+        </select>
+      </div>
+
+      <div class="group" id="incomes">
+        <h3>Income Streams</h3>
+        <div class="rows" data-group="incomes">
+          <div class="row template" hidden>
+            <input name="incomes-name[]" placeholder="Name (e.g., Salary)"/>
+            <input name="incomes-amount[]" placeholder="Amount (e.g., 3500)"/>
+            <select name="incomes-interval[]">
+              <option value="monthly">monthly</option>
+              <option value="biweekly">biweekly</option>
+              <option value="weekly">weekly</option>
+              <option value="annual">annual</option>
+            </select>
+            <select name="incomes-after_tax[]">
+              <option value="true">after-tax</option>
+              <option value="false">pre-tax</option>
+            </select>
+          </div>
+        </div>
+        <button type="button" class="add" onclick="addRow('incomes')">+ Add income</button>
+      </div>
+
+      <div class="group" id="costs">
+        <h3>Recurring Costs</h3>
+        <div class="rows" data-group="costs">
+          <div class="row template" hidden>
+            <input name="costs-name[]" placeholder="Name (e.g., Rent)"/>
+            <input name="costs-amount[]" placeholder="Amount (e.g., 1200)"/>
+            <select name="costs-interval[]">
+              <option value="monthly">monthly</option>
+              <option value="biweekly">biweekly</option>
+              <option value="weekly">weekly</option>
+              <option value="annual">annual</option>
+            </select>
+            <input name="costs-category[]" placeholder="Category (e.g., Housing)"/>
+          </div>
+        </div>
+        <button type="button" class="add" onclick="addRow('costs')">+ Add cost</button>
+      </div>
+
+      <div class="group" id="debts">
+        <h3>Debts</h3>
+        <div class="rows" data-group="debts">
+          <div class="row debts template" hidden>
+            <input name="debts-name[]" placeholder="Name (e.g., Visa)"/>
+            <input name="debts-balance[]" placeholder="Balance (e.g., 2300)"/>
+            <input name="debts-apr[]" placeholder="APR % (e.g., 24.99)"/>
+            <input name="debts-min_payment[]" placeholder="Min payment (e.g., 75)"/>
+            <input name="debts-due_day[]" placeholder="Due day (1-31)"/>
+          </div>
+        </div>
+        <button type="button" class="add" onclick="addRow('debts')">+ Add debt</button>
+      </div>
+
+      <div class="group" id="accounts">
+        <h3>Accounts</h3>
+        <div class="rows" data-group="accounts">
+          <div class="row accounts template" hidden>
+            <input name="accounts-name[]" placeholder="Name (e.g., Checking)"/>
+            <input name="accounts-balance[]" placeholder="Balance (e.g., 2500)"/>
+          </div>
+        </div>
+        <button type="button" class="add" onclick="addRow('accounts')">+ Add account</button>
+      </div>
+
+      <div class="group">
+        <h3>Notes</h3>
+        <textarea name="notes" rows="3" style="width:100%;" placeholder="Anything else to note?"></textarea>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Save snapshot</button>
+      </div>
+    </form>
+
+    <script>
+      function addRow(sectionId){
+        const section = document.querySelector('#'+sectionId+' .rows');
+        const tpl = section.querySelector('.template');
+        const clone = tpl.cloneNode(true);
+        clone.hidden = false;
+        clone.classList.remove('template');
+        section.appendChild(clone);
+      }
+      // Seed one empty row per group
+      window.addEventListener('DOMContentLoaded',()=>{
+        ['incomes','costs','debts','accounts'].forEach(addRow);
+      });
+    </script>
+  </body>
+</html>
+
