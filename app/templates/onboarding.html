@@ -129,9 +129,7 @@
 
   // Preload from server-provided JSON
   (function(){
-    <script>
-      const initial = {{ profile | default({}) | tojson | safe }};
-    </script>
+    const initial = {{ (profile or {})|tojson|safe }};
     // Top-level fields
     if(initial.currency){ document.querySelector('[name="currency"]').value = initial.currency; }
     if(initial.household_size){ document.querySelector('[name="household_size"]').value = initial.household_size; }
