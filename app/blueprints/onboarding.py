@@ -52,16 +52,16 @@ def onboarding_submit():
     employer_match_pct_on_salary = float(request.form.get("employer_match_pct_on_salary") or 0)
     employer_match_rate = float(request.form.get("employer_match_rate") or 0)
 
-    incomes = collect_group("Incomes - recurring sources of income",
+    incomes = collect_group("incomes",
                             ["name","amount","interval","after_tax"],
                             {"amount": float, "after_tax": lambda x: x.lower()=="true"})
-    costs   = collect_group("Costs - recurring expenses",
+    costs   = collect_group("costs",
                             ["name","amount","interval","category"],
                             {"amount": float})
-    debts   = collect_group("Debts - outstanding debts",
+    debts   = collect_group("debts",
                             ["name","balance","apr","min_payment","due_day"],
                             {"balance": float, "apr": float, "min_payment": float, "due_day": int})
-    accounts= collect_group("Accounts - bank accounts and other assets",
+    accounts= collect_group("accounts",
                             ["name","balance"],
                             {"balance": float})
 
