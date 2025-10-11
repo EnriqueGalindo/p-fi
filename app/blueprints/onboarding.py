@@ -17,7 +17,9 @@ def root():
 
 @bp.get("/onboarding")
 def onboarding_form():
-    return render_template("onboarding.html")
+    user_id = current_app.config["USER_ID"]
+    latest = current_app.gcs.read_json(f"profiles/{user_id}/latest.json") or {}
+    return render_template("onboarding.html", profile=latest)
 
 @bp.post("/onboarding")
 def onboarding_submit():

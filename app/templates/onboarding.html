@@ -7,6 +7,7 @@
   .row.accounts{grid-template-columns:2fr 1fr}
   input,select,textarea{padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:8px}
   button.add{margin-top:.5rem}
+  .muted{color:#6b7280}
 </style>
 
 <div class="card">
@@ -115,6 +116,7 @@
 </div>
 
 <script>
+  // Clone + append a blank row
   function addRow(sectionId){
     const section = document.querySelector('#'+sectionId+' .rows');
     const tpl = section.querySelector('.template');
@@ -122,8 +124,62 @@
     clone.hidden = false;
     clone.classList.remove('template');
     section.appendChild(clone);
+    return clone;
   }
-  // seed one empty row per group
-  window.addEventListener('DOMContentLoaded',()=>['incomes','costs','debts','accounts'].forEach(addRow));
+
+  // Preload from server-provided JSON
+  (function(){
+    <script>
+      const initial = {{ profile | default({}) | tojson | safe }};
+    </script>
+    // Top-level fields
+    if(initial.currency){ document.querySelector('[name="currency"]').value = initial.currency; }
+    if(initial.household_size){ document.querySelector('[name="household_size"]').value = initial.household_size; }
+    if(initial.has_employer_plan){ document.querySelector('[name="has_employer_plan"]').checked = true; }
+    if(initial.employer_match_pct_on_salary){ document.querySelector('[name="employer_match_pct_on_salary"]').value = initial.employer_match_pct_on_salary; }
+    if(initial.employer_match_rate){ document.querySelector('[name="employer_match_rate"]').value = initial.employer_match_rate; }
+    if(initial.notes){ document.querySelector('[name="notes"]').value = initial.notes; }
+
+    // Helper to render array sections
+    function seedArray(sectionId, items, fillFn){
+      const rows = document.querySelector('#'+sectionId+' .rows');
+      rows.querySelectorAll(':scope > .row:not(.template)').forEach(n => n.remove());
+      if(items && items.length){
+        items.forEach(obj => {
+          const row = addRow(sectionId);
+          fillFn(row, obj);
+        });
+      } else {
+        addRow(sectionId); // one blank row
+      }
+    }
+
+    seedArray('incomes', initial.income_streams, (row, inc)=>{
+      row.querySelector('[name="incomes-name[]"]').value   = inc.name || '';
+      row.querySelector('[name="incomes-amount[]"]').value = inc.amount ?? '';
+      row.querySelector('[name="incomes-interval[]"]').value = (inc.interval || 'monthly');
+      row.querySelector('[name="incomes-after_tax[]"]').value = (inc.after_tax ? 'true' : 'false');
+    });
+
+    seedArray('costs', initial.recurring_costs, (row, c)=>{
+      row.querySelector('[name="costs-name[]"]').value   = c.name || '';
+      row.querySelector('[name="costs-amount[]"]').value = c.amount ?? '';
+      row.querySelector('[name="costs-interval[]"]').value = (c.interval || 'monthly');
+      row.querySelector('[name="costs-category[]"]').value = c.category || '';
+    });
+
+    seedArray('debts', initial.debts, (row, d)=>{
+      row.querySelector('[name="debts-name[]"]').value = d.name || '';
+      row.querySelector('[name="debts-balance[]"]').value = d.balance ?? '';
+      row.querySelector('[name="debts-apr[]"]').value = d.apr ?? '';
+      row.querySelector('[name="debts-min_payment[]"]').value = d.min_payment ?? '';
+      row.querySelector('[name="debts-due_day[]"]').value = d.due_day ?? '';
+    });
+
+    seedArray('accounts', initial.accounts, (row, a)=>{
+      row.querySelector('[name="accounts-name[]"]').value = a.name || '';
+      row.querySelector('[name="accounts-balance[]"]').value = a.balance ?? '';
+    });
+  })();
 </script>
 {% endblock %}
