@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% block content %}
+<div class="card">
+  <h1>Plan — Step {{ plan.current_step }}</h1>
+  <div class="muted">Generated {{ plan.generated_at }}</div>
+  <p>
+    Net monthly income: <b>${{ '%.2f'|format(plan.monthly.income_after_tax) }}</b><br/>
+    Required expenses: <b>${{ '%.2f'|format(plan.monthly.required_expenses) }}</b><br/>
+    Groceries allowance: <b>${{ '%.2f'|format(plan.monthly.groceries_allowance) }}</b><br/>
+    Leftover: <b>${{ '%.2f'|format(plan.monthly.leftover) }}</b>
+  </p>
+
+  <table>
+    <thead><tr><th>#</th><th>Step</th><th>Status</th><th>Details</th></tr></thead>
+    <tbody>
+      {% for s in plan.steps %}
+      <tr>
+        <td>{{ s.id }}</td>
+        <td>{{ s.title }}</td>
+        <td>
+          {% set st = s.status %}
+          <span class="{{ 'ok' if st in ['pass'] else ('bad' if st in ['block','blocked'] else 'warn') }}">{{ st }}</span>
+        </td>
+        <td>
+          {% if s.id == 1 %}
+            Target: ${{ '%.2f'|format(s.target_fund) }}, Cash now: ${{ '%.2f'|format(s.cash_now) }}, Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
+          {% elif s.notes %}
+            {{ s.notes|join(' • ') }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p><a href="/plan.json">Download plan JSON</a></p>
+</div>
+{% endblock %}
