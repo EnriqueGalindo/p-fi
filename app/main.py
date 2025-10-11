@@ -56,22 +56,22 @@ def onboarding_submit():
     notes = request.form.get("notes", "").strip()
 
     incomes = collect_group(
-        "incomes",
+        "Incomes - recurring sources of income",
         fields=["name", "amount", "interval", "after_tax"],
         cast_map={"amount": float, "after_tax": lambda x: x.lower() == "true"},
     )
     costs = collect_group(
-        "costs",
+        "Costs - recurring expenses",
         fields=["name", "amount", "interval", "category"],
         cast_map={"amount": float},
     )
     debts = collect_group(
-        "debts",
+        "Debts - outstanding debts",
         fields=["name", "balance", "apr", "min_payment", "due_day"],
         cast_map={"balance": float, "apr": float, "min_payment": float, "due_day": int},
     )
     accounts = collect_group(
-        "accounts",
+        "Accounts - bank accounts and other assets",
         fields=["name", "balance"],
         cast_map={"balance": float},
     )
