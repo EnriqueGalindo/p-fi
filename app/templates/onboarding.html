@@ -1,27 +1,129 @@
-{% extends "base.html" %}{% block content %}
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .group{border:1px solid #e5e7eb;border-radius:12px;padding:1rem;margin:1rem 0}
+  .row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:.5rem;margin:.5rem 0;align-items:center}
+  .row.debts{grid-template-columns:2fr 1fr 1fr 1fr .6fr}
+  .row.accounts{grid-template-columns:2fr 1fr}
+  input,select,textarea{padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:8px}
+  button.add{margin-top:.5rem}
+</style>
+
 <div class="card">
   <h1>Starting Finances Questionnaire</h1>
   <form method="post" action="/onboarding">
-    <div>
-      <label>Currency</label>
-      <select name="currency"><option>USD</option><option>EUR</option><option>GBP</option></select>
-    </div>
-    <div>
-      <label>Household size</label>
-      <input name="household_size" type="number" min="1" value="1"/>
-    </div>
-    <div>
-      <label><input type="checkbox" name="has_employer_plan"/> I have an employer plan with matching</label>
-      <div class="muted">If yes, fill these (optional):</div>
-      <input name="employer_match_pct_on_salary" placeholder="Match cap % of salary (e.g., 6)"/>
-      <input name="employer_match_rate" placeholder="Match rate % (e.g., 50)"/>
+    <!-- Basics -->
+    <div class="group">
+      <div>
+        <label>Currency
+          <select name="currency">
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-top:.5rem;">
+        <label>Household size
+          <input name="household_size" type="number" min="1" value="1"/>
+        </label>
+      </div>
+      <div style="margin-top:.5rem;">
+        <label><input type="checkbox" name="has_employer_plan"> I have an employer plan with matching</label>
+        <div class="muted">If yes, fill these (optional):</div>
+        <input name="employer_match_pct_on_salary" placeholder="Match cap % of salary (e.g., 6)"/>
+        <input name="employer_match_rate" placeholder="Match rate % (e.g., 50)"/>
+      </div>
     </div>
 
-    <!-- keep your Income / Costs / Debts / Accounts dynamic sections here -->
-    <!-- (unchanged from your current form) -->
+    <!-- Incomes -->
+    <div class="group" id="incomes">
+      <h3>Incomes — recurring sources of income</h3>
+      <div class="rows" data-group="incomes">
+        <div class="row template" hidden>
+          <input name="incomes-name[]" placeholder="Name (e.g., Salary)"/>
+          <input name="incomes-amount[]" placeholder="Amount (e.g., 3500)"/>
+          <select name="incomes-interval[]">
+            <option value="monthly">monthly</option>
+            <option value="biweekly">biweekly</option>
+            <option value="weekly">weekly</option>
+            <option value="annual">annual</option>
+          </select>
+          <select name="incomes-after_tax[]">
+            <option value="true">after-tax</option>
+            <option value="false">pre-tax</option>
+          </select>
+        </div>
+      </div>
+      <button type="button" class="add" onclick="addRow('incomes')">+ Add income</button>
+    </div>
 
-    <div><label>Notes</label><br/><textarea name="notes" rows="3" style="width:100%"></textarea></div>
+    <!-- Costs -->
+    <div class="group" id="costs">
+      <h3>Costs — recurring expenses</h3>
+      <div class="rows" data-group="costs">
+        <div class="row template" hidden>
+          <input name="costs-name[]" placeholder="Name (e.g., Rent)"/>
+          <input name="costs-amount[]" placeholder="Amount (e.g., 1200)"/>
+          <select name="costs-interval[]">
+            <option value="monthly">monthly</option>
+            <option value="biweekly">biweekly</option>
+            <option value="weekly">weekly</option>
+            <option value="annual">annual</option>
+          </select>
+          <input name="costs-category[]" placeholder="Category (e.g., Housing)"/>
+        </div>
+      </div>
+      <button type="button" class="add" onclick="addRow('costs')">+ Add cost</button>
+    </div>
+
+    <!-- Debts -->
+    <div class="group" id="debts">
+      <h3>Debts — outstanding debts</h3>
+      <div class="rows" data-group="debts">
+        <div class="row debts template" hidden>
+          <input name="debts-name[]" placeholder="Name (e.g., Visa)"/>
+          <input name="debts-balance[]" placeholder="Balance (e.g., 2300)"/>
+          <input name="debts-apr[]" placeholder="APR % (e.g., 24.99)"/>
+          <input name="debts-min_payment[]" placeholder="Min payment (e.g., 75)"/>
+          <input name="debts-due_day[]" placeholder="Due day (1-31)"/>
+        </div>
+      </div>
+      <button type="button" class="add" onclick="addRow('debts')">+ Add debt</button>
+    </div>
+
+    <!-- Accounts -->
+    <div class="group" id="accounts">
+      <h3>Accounts — bank/asset balances</h3>
+      <div class="rows" data-group="accounts">
+        <div class="row accounts template" hidden>
+          <input name="accounts-name[]" placeholder="Name (e.g., Checking)"/>
+          <input name="accounts-balance[]" placeholder="Balance (e.g., 2500)"/>
+        </div>
+      </div>
+      <button type="button" class="add" onclick="addRow('accounts')">+ Add account</button>
+    </div>
+
+    <!-- Notes -->
+    <div class="group">
+      <label>Notes</label><br/>
+      <textarea name="notes" rows="3" style="width:100%"></textarea>
+    </div>
+
     <button type="submit">Save snapshot</button>
   </form>
 </div>
+
+<script>
+  function addRow(sectionId){
+    const section = document.querySelector('#'+sectionId+' .rows');
+    const tpl = section.querySelector('.template');
+    const clone = tpl.cloneNode(true);
+    clone.hidden = false;
+    clone.classList.remove('template');
+    section.appendChild(clone);
+  }
+  // seed one empty row per group
+  window.addEventListener('DOMContentLoaded',()=>['incomes','costs','debts','accounts'].forEach(addRow));
+</script>
 {% endblock %}
