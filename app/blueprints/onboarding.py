@@ -12,7 +12,7 @@ def root():
     # send users to the form if no profile exists; otherwise straight to plan
     latest = current_app.gcs.read_json(f"{_profile_prefix(current_app.config['USER_ID'])}latest.json")
     if latest is None:
-        return render_template("onboarding.html")
+        return render_template("onboarding.html", profile={})
     return redirect(url_for("plan.view_plan"))
 
 @bp.get("/onboarding")
