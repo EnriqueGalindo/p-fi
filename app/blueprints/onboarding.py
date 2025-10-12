@@ -63,9 +63,26 @@ def onboarding_submit():
     debts   = collect_group("debts",
                             ["name","balance","apr","min_payment","due_day"],
                             {"balance": float, "apr": float, "min_payment": float, "due_day": int})
-    accounts= collect_group("accounts",
-                            ["name","balance"],
+    accounts = collect_group("accounts",
+                            ["name", "balance", "type"],
                             {"balance": float})
+    
+    VALID_TYPES = {"cash","checking","savings","investment","retirement"}
+    errors = []
+    for i, a in enumerate(accounts, start=1):
+        has_any = any(a.get(k) not in (None, "",) for k in ("name","balance","type"))
+        if not has_any:
+            continue  # completely empty row, drop it
+        if not a.get("type"):
+            errors.append(f"Accounts row {i}: type is required.")
+        elif str(a["type"]).lower() not in VALID_TYPES:
+            errors.append(f"Accounts row {i}: invalid type '{a['type']}'.")
+        else:
+            a["type"] = str(a["type"]).lower()
+
+    if errors:
+        # Simple error return; you can render the template with errors if you prefer
+        return ("Form error:\n" + "\n".join(errors), 400)
 
     snapshot = {
         "user_id": user_id,

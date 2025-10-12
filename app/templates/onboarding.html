@@ -94,12 +94,24 @@
     </div>
 
     <!-- Accounts -->
+    <style>
+      .row.accounts{grid-template-columns: 2fr 1fr 1fr}
+    </style>
+
     <div class="group" id="accounts">
       <h3>Accounts — bank/asset balances</h3>
       <div class="rows" data-group="accounts">
         <div class="row accounts template" hidden>
           <input name="accounts-name[]" placeholder="Name (e.g., Checking)"/>
           <input name="accounts-balance[]" placeholder="Balance (e.g., 2500)"/>
+          <select name="accounts-type[]" required>
+            <option value="" selected disabled>-- type --</option>
+            <option value="cash">cash</option>
+            <option value="checking">checking</option>
+            <option value="savings">savings</option>
+            <option value="investment">investment</option>
+            <option value="retirement">retirement</option>
+          </select>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('accounts')">+ Add account</button>
@@ -177,6 +189,7 @@
     seedArray('accounts', initial.accounts, (row, a)=>{
       row.querySelector('[name="accounts-name[]"]').value = a.name || '';
       row.querySelector('[name="accounts-balance[]"]').value = a.balance ?? '';
+      row.querySelector('[name="accounts-type[]"]').value = (a.type || '').toLowerCase();
     });
   })();
 </script>

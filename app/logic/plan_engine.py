@@ -40,8 +40,14 @@ def compute_plan(snapshot: dict):
     else:
         ef_target = monthly_expenses * 3               # default 3 months
 
-    cash_now = sum(float(a.get("balance") or 0) for a in accounts
-                   if str(a.get("name","")).lower() in ("cash","checking","savings"))
+    CASH_TYPES = {"cash", "checking", "savings"}
+
+    cash_now = 0.0
+    for a in accounts:
+        atype = (a.get("type") or "").lower()
+        if atype in CASH_TYPES:
+            cash_now += float(a.get("balance") or 0)
+
     ef_gap = max(0.0, ef_target - cash_now)
 
     # which step are we on?
