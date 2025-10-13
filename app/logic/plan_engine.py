@@ -93,42 +93,43 @@ def compute_plan(snapshot: dict):
     else:
         current = 7  # on to IRA and beyond
 
-    # Build steps array for the table
+    hi_list = [
+        {
+            "name": (d.get("name") or ""),
+            "balance": round(float(d.get("balance") or 0), 2),
+            "apr": round(float(d.get("apr") or 0), 2),
+            "min_payment": round(float(d.get("min_payment") or 0), 2),
+        }
+        for d in hi_debts
+    ]
+    hi_total = round(sum(x["balance"] for x in hi_list), 2)
+
     steps = [
-        {"id":0,"title":"Budget / no deficit",
-         "status": "block" if leftover<0 else "pass",
-         "notes":[f"Leftover: ${leftover:,.2f}", f"Required monthly: ${required:,.2f}"]},
+        {"id":0,"title":"Budget / no deficit","status":"block" if leftover<0 else "pass",
+        "notes":[f"Leftover: ${leftover:,.2f}", f"Required monthly: ${required:,.2f}"]},
 
-        {"id":1,"title":"Starter EF $1,000",
-         "target_fund": round(starter_ef_target,2),
-         "cash_now": round(cash_now,2),
-         "monthly_to_target": round(max(0.0, min(leftover, starter_ef_target - cash_now)),2),
-         "status":"progress" if cash_now < starter_ef_target and leftover>=0 else ("pass" if cash_now >= starter_ef_target else "blocked")},
+        {"id":1,"title":"Starter EF $1,000","target_fund":round(starter_ef_target,2),
+        "cash_now":round(cash_now,2),"monthly_to_target":round(max(0.0, min(leftover, starter_ef_target - cash_now)),2),
+        "status":"progress" if cash_now < starter_ef_target and leftover>=0 else ("pass" if cash_now >= starter_ef_target else "blocked")},
 
+        # ↓↓ this is the updated Step 2 ↓↓
         {"id":2,"title":"Pay off high-interest debts (≥10% APR)",
-         "status": "info" if hi_debts else "pass"},
+        "status": "info" if hi_debts else "pass",
+        "debts": hi_list,
+        "debts_total": hi_total},
 
-        {"id":3,"title":"6-month emergency fund",
-         "target_fund": round(six_month_target,2),
-         "cash_now": round(cash_now,2),
-         "monthly_to_target": round(max(0.0, min(leftover, six_month_target - cash_now)),2),
-         "status":"progress" if cash_now < six_month_target and leftover>=0 else ("pass" if cash_now >= six_month_target else "blocked")},
+        {"id":3,"title":"6-month emergency fund","target_fund":round(six_month_target,2),
+        "cash_now":round(cash_now,2),"monthly_to_target":round(max(0.0, min(leftover, six_month_target - cash_now)),2),
+        "status":"progress" if cash_now < six_month_target and leftover>=0 else ("pass" if cash_now >= six_month_target else "blocked")},
 
-        {"id":4,"title":"Capture employer match",
-         "status":"info" if has_match else "skip"},
-
-        {"id":5,"title":"Pay down medium-interest debts (4%–<10%)",
-         "status":"info" if med_debts else "pass"},
-
-        {"id":6,"title":"12-month emergency fund",
-         "target_fund": round(twelve_month_target,2),
-         "cash_now": round(cash_now,2),
-         "monthly_to_target": round(max(0.0, min(leftover, twelve_month_target - cash_now)),2),
-         "status":"progress" if cash_now < twelve_month_target and leftover>=0 else ("pass" if cash_now >= twelve_month_target else "blocked")},
-
+        {"id":4,"title":"Capture employer match","status":"info" if has_match else "skip"},
+        {"id":5,"title":"Pay down medium-interest debts (4%–<10%)","status":"info" if med_debts else "pass"},
+        {"id":6,"title":"12-month emergency fund","target_fund":round(twelve_month_target,2),
+        "cash_now":round(cash_now,2),"monthly_to_target":round(max(0.0, min(leftover, twelve_month_target - cash_now)),2),
+        "status":"progress" if cash_now < twelve_month_target and leftover>=0 else ("pass" if cash_now >= twelve_month_target else "blocked")},
         {"id":7,"title":"Contribute to an IRA","status":"info"},
         {"id":8,"title":"Save more for retirement","status":"info"},
-        {"id":9,"title":"Save for other goals","status":"info"}
+        {"id":9,"title":"Save for other goals","status":"info"},
     ]
 
     return {

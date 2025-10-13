@@ -34,13 +34,28 @@
           <span class="{{ 'ok' if st in ['pass'] else ('bad' if st in ['block','blocked'] else 'warn') }}">{{ st }}</span>
         </td>
         <td>
-          {% if s.id == 1 %}
-            Target: ${{ '%.2f'|format(s.target_fund) }}, Cash now: ${{ '%.2f'|format(s.cash_now) }}, Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
-          {% elif s.notes %}
-            {{ s.notes|join(' • ') }}
-          {% else %}
-            —
-          {% endif %}
+            {% if s.id == 1 %}
+                Target: ${{ '%.2f'|format(s.target_fund) }}, Cash now: ${{ '%.2f'|format(s.cash_now) }}, Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
+            {% elif s.id == 2 and s.debts %}
+                <div class="muted" style="margin-bottom:.25rem;">High-interest debts (APR ≥ 10%) — Total: ${{ '%.2f'|format(s.debts_total) }}</div>
+                <table style="font-size:.95rem;">
+                <thead><tr><th>Name</th><th>Balance</th><th>APR</th><th>Min/mo</th></tr></thead>
+                <tbody>
+                    {% for d in s.debts %}
+                    <tr>
+                    <td>{{ d.name }}</td>
+                    <td>${{ '%.2f'|format(d.balance) }}</td>
+                    <td>{{ '%.2f'|format(d.apr) }}%</td>
+                    <td>${{ '%.2f'|format(d.min_payment) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                </table>
+            {% elif s.notes %}
+                {{ s.notes|join(' • ') }}
+            {% else %}
+                —
+            {% endif %}
         </td>
       </tr>
       {% endfor %}
