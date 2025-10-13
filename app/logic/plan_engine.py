@@ -25,6 +25,8 @@ def view_plan():
 
     step_copy = steps_cfg.get(str(plan["current_step"]), {"name": f"Step {plan['current_step']}", "description": "", "requirements": []})
 
+    print(step_copy)
+
     # persist history (unchanged)
     ts = plan["generated_at"].replace(":", "-")
     current_app.gcs.write_json(f"profiles/{user_id}/plans/{ts}.json", plan)
