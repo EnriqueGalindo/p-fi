@@ -1,6 +1,6 @@
 # app/blueprints/plan.py
-from flask import Blueprint, current_app, jsonify, redirect, render_template, url_for
-from ..logic.plan_engine import compute_plan
+from flask import Blueprint, current_app, jsonify, redirect, render_template, url_for, request
+from ..logic.plan_engine import compute_plan, simulate_debt_payoff
 from ..services.utils import get_json_from_gcs
 from math import ceil, log
 from ..logic.plan_engine import MONTH_FACTORS  # reuse factors
@@ -136,23 +136,73 @@ def view_plan():
 
     plan = compute_plan(latest)
 
-    steps_cfg = get_json_from_gcs(
-        current_app.config["GCS_BUCKET"],
-        STEPS_CFG_PATH,
-        default={},   # no local default, as you prefer
-        ttl=0         # set to 300 later
-    ) or {}
-
-    # normalize keys so 2 and "2" both work
+    # Load step copy (you already have this in your file; omitted for brevity)
+    from ..services.utils import get_json_from_gcs
+    STEPS_CFG_PATH = "config/plan_steps.json"
+    steps_cfg = get_json_from_gcs(current_app.config["GCS_BUCKET"], STEPS_CFG_PATH, default={}, ttl=300) or {}
     steps_cfg = {str(k): v for k, v in steps_cfg.items()}
-
     step_copy = steps_cfg.get(str(plan["current_step"]), {})
 
-    # (optional) log so you can see it
-    current_app.logger.info("step_copy=%s", step_copy)
+    # --- NEW: strategy + payoff simulation for Step 2
+    strategy = request.args.get("strategy", "avalanche").lower()
+    if strategy not in ("avalanche", "snowball"):
+        strategy = "avalanche"
 
+    payoff = None
+    if plan["current_step"] <= 2:
+        # One-month required costs (same as compute_plan)
+        latest_costs = latest.get("recurring_costs", []) or []
+        latest_debts = latest.get("debts", []) or []
+        hh = int(latest.get("household_size") or 1)
+
+        def _to_monthly(amount, interval):
+            MONTH_FACTORS = {"monthly": 1, "biweekly": 26/12, "weekly": 52/12, "annual": 1/12}
+            if amount is None:
+                return 0.0
+            return float(amount) * MONTH_FACTORS.get((interval or "monthly").lower(), 1)
+
+        costs_monthly = sum(_to_monthly(c.get("amount"), c.get("interval")) for c in latest_costs)
+        min_payments  = sum(float(d.get("min_payment") or 0) for d in latest_debts)
+        groceries     = 400 * hh
+        monthly_required = costs_monthly + min_payments + groceries
+
+        # Cash now (strict by account type, already computed into plan)
+        cash_now = float(plan.get("cash_now", 0.0))
+
+        # Step 2 EF target = $1,000
+        ef_now_capped = min(max(0.0, cash_now - monthly_required), 1000.0)
+
+        # Amounts we’ll actually use in the sim
+        lump_available = max(0.0, cash_now - monthly_required - ef_now_capped)
+        monthly_extra  = max(0.0, float(plan["monthly"]["leftover"]))
+
+        # HIGH-INTEREST SET: filter directly from latest snapshot (APR ≥ 10, balance > 0)
+        hi_debts = [
+            {
+                "name": d.get("name") or "",
+                "balance": float(d.get("balance") or 0),
+                "apr": float(d.get("apr") or 0),
+                "min_payment": float(d.get("min_payment") or 0),
+            }
+            for d in latest_debts
+            if float(d.get("apr") or 0) >= 10 and float(d.get("balance") or 0) > 0
+        ]
+
+        # Run the sim
+        payoff = simulate_debt_payoff(
+            debts=hi_debts,
+            monthly_extra=monthly_extra,
+            lump_sum=lump_available,
+            order=strategy,
+        )
+
+    # persist history (unchanged)
     ts = plan["generated_at"].replace(":", "-")
     current_app.gcs.write_json(f"profiles/{user_id}/plans/{ts}.json", plan)
     current_app.gcs.write_json(f"profiles/{user_id}/plan-latest.json", plan)
 
-    return render_template("plan.html", plan=plan, step_copy=step_copy)
+    return render_template("plan.html",
+                           plan=plan,
+                           step_copy=step_copy,
+                           strategy=strategy,
+                           payoff=payoff)

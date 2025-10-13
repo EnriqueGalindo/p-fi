@@ -1,19 +1,33 @@
-{% extends "base.html" %}{% block content %}
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .muted{color:#6b7280}
+  .ok{color:#16a34a}
+  .warn{color:#d97706}
+  .bad{color:#dc2626}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:.55rem .6rem;border-top:1px solid #e5e7eb;text-align:left}
+  thead th{border-top:none;color:#374151;font-weight:600}
+  .cardbox{margin:.75rem 0 1rem;padding:.9rem;border:1px solid #e5e7eb;border-radius:10px}
+  .pill a{padding:.25rem .5rem;border:1px solid #e5e7eb;border-radius:999px;text-decoration:none}
+  .pill a.active{background:#eef2ff;border-color:#6366f1;color:#3730a3}
+</style>
+
 <div class="card">
   <h1>Plan — Step {{ plan.current_step }}</h1>
   <div class="muted">Generated {{ plan.generated_at }}</div>
 
-<div style="margin:.75rem 0 1rem; padding:.75rem; border:1px solid #e5e7eb; border-radius:10px;">
-    <div style="font-weight:600; font-size:1.1rem;">{{ step_copy.name }}</div>
-    <div class="muted" style="margin-top:.25rem;">{{ step_copy.description }}</div>
-    {% if step_copy.requirements and step_copy.requirements|length %}
-    <ul style="margin:.5rem 0 0 .9rem;">
-        {% for req in step_copy.requirements %}
-        <li>{{ req }}</li>
-        {% endfor %}
-    </ul>
+  {% if step_copy and (step_copy.name or step_copy.description or step_copy.requirements) %}
+  <div class="cardbox">
+    {% if step_copy.name %}<div style="font-weight:700;font-size:1.1rem;">{{ step_copy.name }}</div>{% endif %}
+    {% if step_copy.description %}<div class="muted" style="margin-top:.25rem;">{{ step_copy.description }}</div>{% endif %}
+    {% if step_copy.requirements %}
+      <ul style="margin:.5rem 0 0 .9rem;">
+        {% for req in step_copy.requirements %}<li>{{ req }}</li>{% endfor %}
+      </ul>
     {% endif %}
-</div>
+  </div>
+  {% endif %}
 
   <p>
     Net monthly income: <b>${{ '%.2f'|format(plan.monthly.income_after_tax) }}</b><br/>
@@ -25,58 +39,89 @@
   <table>
     <thead><tr><th>#</th><th>Step</th><th>Status</th><th>Details</th></tr></thead>
     <tbody>
-      {% for s in plan.steps %}
+    {% for s in plan.steps %}
       <tr>
         <td>{{ s.id }}</td>
         <td>{{ s.title }}</td>
         <td>
           {% set st = s.status %}
-          <span class="{{ 'ok' if st in ['pass'] else ('bad' if st in ['block','blocked'] else 'warn') }}">{{ st }}</span>
+          <span class="{{ 'ok' if st=='pass' else ('bad' if st in ['block','blocked'] else 'warn') }}">{{ st }}</span>
         </td>
         <td>
-            {% if s.id == 1 %}
-                <!-- Always show for Step 1 -->
-                Target: ${{ '%.2f'|format(s.target_fund) }},
-                EF now (cash − 1 mo costs): ${{ '%.2f'|format(s.ef_now) }},
-                Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
+          {# Step 1 EF details always visible (capped) #}
+          {% if s.id == 1 %}
+            Target: ${{ '%.2f'|format(s.target_fund) }},
+            EF now (cash − 1 mo costs, capped): ${{ '%.2f'|format(s.ef_now) }},
+            Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
 
-            {% elif s.id in [3, 6] and plan.current_step >= s.id %}
-                <!-- Show Step 3/6 EF details ONLY after you reach those steps -->
-                Target: ${{ '%.2f'|format(s.target_fund) }},
-                EF now (cash − 1 mo costs): ${{ '%.2f'|format(s.ef_now) }},
-                Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
+          {# Step 3 & 6 EF details only after you reach them #}
+          {% elif s.id in [3,6] and plan.current_step >= s.id %}
+            Target: ${{ '%.2f'|format(s.target_fund) }},
+            EF now (cash − 1 mo costs, capped): ${{ '%.2f'|format(s.ef_now) }},
+            Save/month: ${{ '%.2f'|format(s.monthly_to_target) }}
 
-            {% elif s.id == 2 and s.debts %}
-                <div class="muted" style="margin-bottom:.25rem;">
-                High-interest debts (APR ≥ 10%) — Total: ${{ '%.2f'|format(s.debts_total) }}
-                </div>
-                <table style="font-size:.95rem;">
-                <thead><tr><th>Name</th><th>Balance</th><th>APR</th><th>Min/mo</th></tr></thead>
-                <tbody>
-                    {% for d in s.debts %}
-                    <tr>
-                    <td>{{ d.name }}</td>
-                    <td>${{ '%.2f'|format(d.balance) }}</td>
-                    <td>{{ '%.2f'|format(d.apr) }}%</td>
-                    <td>${{ '%.2f'|format(d.min_payment) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                </table>
+          {% elif s.id == 2 %}
+  {% if payoff %}
+    {# Normalize field names from different simulator variants #}
+    {% set lump_now =
+         payoff.lump_applied if payoff.lump_applied is defined
+         else (payoff.available_now if payoff.available_now is defined else 0) %}
+    {% set monthly_extra =
+         payoff.monthly_extra if payoff.monthly_extra is defined
+         else (payoff.extra_monthly if payoff.extra_monthly is defined else 0) %}
 
-            {% elif s.notes %}
-                {{ s.notes|join(' • ') }}
+    <div class="pill" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;">
+      <span class="muted">Strategy:</span>
+      <a class="{{ 'active' if strategy=='avalanche' else '' }}"
+         href="{{ url_for('plan.view_plan', strategy='avalanche') }}">Avalanche</a>
+      <a class="{{ 'active' if strategy=='snowball' else '' }}"
+         href="{{ url_for('plan.view_plan', strategy='snowball') }}">Snowball</a>
+    </div>
 
-            {% else %}
-                —
-            {% endif %}
+    <div class="muted" style="margin-bottom:.35rem;">
+      Using available now: ${{ '%.2f'|format(lump_now) }},
+      plus monthly leftover: ${{ '%.2f'|format(monthly_extra) }}.
+    </div>
+
+    <table style="font-size:.95rem;">
+      <thead>
+        <tr>
+          <th>Name</th><th>Balance</th><th>APR</th><th>Min/mo</th><th>Months</th><th>Interest</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in payoff.debts %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td>${{ '%.2f'|format(d.balance) }}</td>
+          <td>{{ '%.2f'|format(d.apr) }}%</td>
+          <td>${{ '%.2f'|format(d.min_payment) }}</td>
+          <td>{{ d.months_to_zero }}</td>
+          <td>${{ '%.2f'|format(d.interest_paid) }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+          <td colspan="4" class="muted" style="text-align:right;">Totals</td>
+          <td><b>{{ payoff.months_total }}</b></td>
+          <td><b>${{ '%.2f'|format(payoff.interest_total) }}</b></td>
+        </tr>
+      </tbody>
+    </table>
+  {% else %}
+    —
+  {% endif %}
+          {# default detail text #}
+          {% elif s.notes %}
+            {{ s.notes|join(' • ') }}
+          {% else %}
+            —
+          {% endif %}
         </td>
-
       </tr>
-      {% endfor %}
+    {% endfor %}
     </tbody>
   </table>
 
-  <p><a href="/plan.json">Download plan JSON</a></p>
+  <p style="margin-top:1rem;"><a href="/plan.json">Download plan JSON</a></p>
 </div>
 {% endblock %}

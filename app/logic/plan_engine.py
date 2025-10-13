@@ -36,6 +36,167 @@ def _to_monthly(amount, interval):
     if amount is None: return 0.0
     return float(amount) * MONTH_FACTORS.get((interval or "monthly").lower(), 1)
 
+# app/logic/plan_engine.py
+
+def simulate_debt_payoff(
+    debts, monthly_extra: float, lump_sum: float, order: str = "avalanche"
+):
+    """
+    debts: list of dicts with keys: name, balance, apr, min_payment
+    monthly_extra: extra amount available each month after all minimums are covered
+    lump_sum: cash to throw at the top debt immediately (time 0)
+    order: "avalanche" (highest APR first) or "snowball" (smallest balance first)
+
+    Returns (schema designed for the template):
+    {
+      "method": <order>,
+      "lump_applied": <float>,
+      "monthly_extra": <float>,
+      "months_total": <int>,
+      "interest_total": <float>,
+      "debts": [
+         {"name","balance","apr","min_payment","months_to_zero","interest_paid"}
+      ],
+    }
+    """
+
+    # Copy & sanitize
+    items = []
+    for d in debts:
+        bal = max(0.0, float(d.get("balance") or 0))
+        apr = max(0.0, float(d.get("apr") or 0))
+        mp  = max(0.0, float(d.get("min_payment") or 0))
+        if bal <= 0:
+            continue
+        items.append({
+            "name": d.get("name") or "",
+            "balance": bal,
+            "balance_temp": bal,
+            "apr": apr,
+            "min_payment": mp,
+            "months_to_zero": None,
+            "interest_paid": 0.0,
+        })
+
+    if not items:
+        return {
+            "method": order,
+            "lump_applied": 0.0,
+            "monthly_extra": float(monthly_extra or 0),
+            "months_total": 0,
+            "interest_total": 0.0,
+            "debts": [],
+        }
+
+    # Sort per strategy
+    if order == "snowball":
+        items.sort(key=lambda x: (x["balance"], -x["apr"]))  # smallest balance first
+    else:
+        items.sort(key=lambda x: (-x["apr"], x["balance"]))  # highest APR first
+
+    # Apply lump sum to the ordered list at time 0
+    remaining_lump = max(0.0, float(lump_sum or 0))
+    lump_applied = 0.0
+    i = 0
+    while remaining_lump > 1e-8 and i < len(items):
+        pay = min(items[i]["balance_temp"], remaining_lump)
+        items[i]["balance_temp"] -= pay
+        remaining_lump -= pay
+        lump_applied += pay
+        if items[i]["balance_temp"] <= 1e-8:
+            items[i]["balance_temp"] = 0.0
+            items[i]["months_to_zero"] = 0  # paid off immediately
+            i += 1
+
+    total_interest = 0.0
+    months = 0
+
+    def all_paid():
+        return all(d["balance_temp"] <= 1e-8 for d in items)
+
+    # Monthly loop (cap large to avoid infinite loops)
+    while not all_paid() and months < 3600:
+        months += 1
+
+        # 1) accrue interest
+        for d in items:
+            if d["balance"] <= 0:
+                continue
+            if d.get('balance_temp') is None:
+                d['balance_temp'] = d['balance']
+
+            if d.get('balance_temp') <= 0:
+                continue
+            balance_work = d["balance_temp"]
+            r = d["apr"] / 100.0 / 12.0
+            interest = balance_work * r
+            balance_work +=  interest
+            d["interest_paid"] += interest
+            total_interest += interest
+            d['balance_temp'] = balance_work
+        # 2) pay minimums
+        for d in items:
+            if d["balance"] <= 0:
+                continue
+            if d.get('balance_temp') is None:
+                d['balance_temp'] = d['balance']
+            if d.get('balance_temp') <= 0:
+                continue
+            balance_work = d["balance_temp"]
+            p = min(d["min_payment"], balance_work)
+            balance_work = d["balance"] - pay
+            if balance_work <= 1e-8 and d["months_to_zero"] is None:
+                d["months_to_zero"] = months
+                balance_work = 0.0
+            d['balance_temp'] = balance_work
+
+        # 3) apply monthly extra to the current target (first unpaid in order)
+        extra = max(0.0, float(monthly_extra or 0))
+        for d in items:
+            if extra <= 1e-8:
+                break
+            if d["balance"] <= 0:
+                continue
+            if d.get('balance_temp') is None:
+                d['balance_temp'] = d['balance']
+            if d.get('balance_temp') <= 0:
+                continue
+            balance_work = d["balance_temp"]
+
+            pay = min(d["balance_temp"], extra)
+            d["balance_temp"] = d["balance_temp"] - pay
+            extra -= pay
+            if d["balance_temp"] <= 1e-8 and d["months_to_zero"] is None:
+                d["months_to_zero"] = months
+                balance_work = 0.0
+            d['balance_temp'] = balance_work
+
+        # Re-sort each month if using snowball/avalanche (optional; keeps target fresh)
+        if order == "snowball":
+            items.sort(key=lambda x: (x["balance"], -x["apr"]))
+        else:
+            items.sort(key=lambda x: (-x["apr"], x["balance"]))
+
+    # Fill months_to_zero if cleared on final month
+    for d in items:
+        if d["months_to_zero"] is None and d["balance_temp"] <= 1e-8:
+            d["months_to_zero"] = months
+
+    # Round for display
+    for d in items:
+        d["balance"] = round(max(0.0, d["balance"]), 2)
+        d["interest_paid"] = round(d["interest_paid"], 2)
+
+    return {
+        "method": order,
+        "lump_applied": round(lump_applied, 2),
+        "monthly_extra": round(float(monthly_extra or 0), 2),
+        "months_total": months if months < 3600 else None,
+        "interest_total": round(total_interest, 2),
+        "debts": items,
+    }
+
+
 def compute_plan(snapshot: dict):
     hh = int(snapshot.get("household_size") or 1)
     incomes = snapshot.get("income_streams", []) or []
