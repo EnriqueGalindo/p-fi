@@ -3,19 +3,17 @@
   <h1>Plan — Step {{ plan.current_step }}</h1>
   <div class="muted">Generated {{ plan.generated_at }}</div>
 
-  {% if step_copy %}
-    <div style="margin:.75rem 0 1rem; padding:.75rem; border:1px solid #e5e7eb; border-radius:10px;">
-      <div style="font-weight:600; font-size:1.1rem;">{{ step_copy.name }}</div>
-      <div class="muted" style="margin-top:.25rem;">{{ step_copy.description }}</div>
-      {% if step_copy.requirements and step_copy.requirements|length %}
-        <ul style="margin:.5rem 0 0 .9rem;">
-          {% for req in step_copy.requirements %}
-            <li>{{ req }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    </div>
-  {% endif %}
+<div style="margin:.75rem 0 1rem; padding:.75rem; border:1px solid #e5e7eb; border-radius:10px;">
+    <div style="font-weight:600; font-size:1.1rem;">{{ step_copy.name }}</div>
+    <div class="muted" style="margin-top:.25rem;">{{ step_copy.description }}</div>
+    {% if step_copy.requirements and step_copy.requirements|length %}
+    <ul style="margin:.5rem 0 0 .9rem;">
+        {% for req in step_copy.requirements %}
+        <li>{{ req }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
 
   <p>
     Net monthly income: <b>${{ '%.2f'|format(plan.monthly.income_after_tax) }}</b><br/>
