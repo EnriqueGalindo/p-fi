@@ -72,11 +72,20 @@
             <option value="weekly">weekly</option>
             <option value="annual">annual</option>
           </select>
-          <input name="costs-category[]" placeholder="Category (e.g., Housing)"/>
+          <select name="costs-type[]">
+            <option value="">-- type --</option>
+            <option value="health_fitness">health/fitness</option>
+            <option value="grocery">grocery</option>
+            <option value="entertainment">entertainment</option>
+            <option value="utility">utility</option>
+            <option value="pet">pet</option>
+            <option value="clothes">clothes</option>
+          </select>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('costs')">+ Add cost</button>
     </div>
+
 
     <!-- Debts -->
     <div class="group" id="debts">
@@ -175,7 +184,7 @@
       row.querySelector('[name="costs-name[]"]').value   = c.name || '';
       row.querySelector('[name="costs-amount[]"]').value = c.amount ?? '';
       row.querySelector('[name="costs-interval[]"]').value = (c.interval || 'monthly');
-      row.querySelector('[name="costs-category[]"]').value = c.category || '';
+      row.querySelector('[name="costs-type[]"]').value = (c.type || '');;
     });
 
     seedArray('debts', initial.debts, (row, d)=>{

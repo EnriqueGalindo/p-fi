@@ -58,7 +58,7 @@ def onboarding_submit():
                             ["name","amount","interval","after_tax"],
                             {"amount": float, "after_tax": lambda x: x.lower()=="true"})
     costs   = collect_group("costs",
-                            ["name","amount","interval","category"],
+                            ["name","amount","interval","type"],
                             {"amount": float})
     debts   = collect_group("debts",
                             ["name","balance","apr","min_payment","due_day"],
