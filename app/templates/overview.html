@@ -2,6 +2,66 @@
 <div class="card">
   <h1>Overview</h1>
 
+  <div class="card" style="margin-top:1rem;">
+    <h2>Weekly Budget</h2>
+    <div class="muted" style="margin-bottom:.5rem;">
+        Leftover routed to <b>{{ weekly.allocations.rationale }}</b> (step {{ weekly.allocations.step }}).
+    </div>
+
+    <p style="margin:.25rem 0 .75rem;">
+        Income/week: <b>${{ '%.2f'|format(weekly.income_week) }}</b><br/>
+        Required/week: <b>${{ '%.2f'|format(weekly.required_week) }}</b><br/>
+        Leftover/week: <b>${{ '%.2f'|format(weekly.leftover_week) }}</b>
+    </p>
+
+    <!-- Costs by type -->
+    <h4 style="margin:.25rem 0 .25rem;">Costs by Type ($/week)</h4>
+    <table style="width:100%;border-collapse:collapse;font-size:.95rem;">
+        <thead>
+        <tr>
+            <th style="text-align:left;border-bottom:1px solid #e5e7eb;padding:.4rem .5rem;">Type</th>
+            <th style="text-align:right;border-bottom:1px solid #e5e7eb;padding:.4rem .5rem;">$/week</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for k, v in weekly.costs_by_type_week|dictsort %}
+        <tr>
+            <td style="padding:.35rem .5rem;text-transform:capitalize;">{{ k.replace('_',' ') }}</td>
+            <td style="padding:.35rem .5rem;text-align:right;">${{ '%.2f'|format(v) }}</td>
+        </tr>
+        {% endfor %}
+        <tr>
+            <td style="padding:.35rem .5rem;color:#6b7280;">Groceries (rule)</td>
+            <td style="padding:.35rem .5rem;text-align:right;color:#6b7280;">
+            ${{ '%.2f'|format(weekly.groceries_week) }}
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <!-- Debts -->
+    <h4 style="margin:1rem 0 .25rem;">Debts ($/week)</h4>
+    <p style="margin:.25rem 0;">
+        Minimums: <b>${{ '%.2f'|format(weekly.debt_min_week) }}</b><br/>
+        {% if weekly.allocations.to_debt_week > 0 %}
+        Extra to debt: <b>${{ '%.2f'|format(weekly.allocations.to_debt_week) }}</b>/week
+        {% else %}
+        <span class="muted">No extra routed to debt this step.</span>
+        {% endif %}
+    </p>
+
+    <!-- Savings -->
+    <h4 style="margin:.75rem 0 .25rem;">Savings ($/week)</h4>
+    {% if weekly.allocations.to_saving_week > 0 %}
+        <p style="margin:.25rem 0;">
+        Extra to savings: <b>${{ '%.2f'|format(weekly.allocations.to_saving_week) }}</b>/week
+        </p>
+    {% else %}
+        <p class="muted" style="margin:.25rem 0;">No extra routed to savings this step.</p>
+    {% endif %}
+    </div>
+
+
   <h3>Emergency Fund</h3>
 <p>
   Cash now: <b>${{ '%.2f'|format(summary.cash_now) }}</b><br/>

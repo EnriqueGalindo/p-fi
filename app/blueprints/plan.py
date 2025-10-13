@@ -4,6 +4,8 @@ from ..logic.plan_engine import compute_plan, simulate_debt_payoff
 from ..services.utils import get_json_from_gcs
 from math import ceil, log
 from ..logic.plan_engine import MONTH_FACTORS  # reuse factors
+from ..logic.weekly_budget import build_weekly_budget
+
 
 
 STEPS_CFG_PATH = "config/plan_steps.json"
@@ -62,11 +64,11 @@ def overview():
     groceries     = 400 * hh
     monthly_required = costs_monthly + min_payments + groceries
 
-    # figure out current step to pick EF target
+    # plan (unchanged)
     from ..logic.plan_engine import compute_plan
     plan = compute_plan(latest)
 
-    # current-step EF target
+    # current-step EF target (your existing thresholds)
     six_target = monthly_required * 6
     twelve_target = monthly_required * 12
     if plan["current_step"] <= 2:
@@ -81,7 +83,7 @@ def overview():
     ef_now = max(0.0, cash_now - monthly_required)
     ef_now = min(ef_now, ef_target)
 
-    # “Available” = cash after reserving 1-month costs AND the step EF
+    # Available = cash after reserving 1-month costs AND the step EF
     available = max(0.0, cash_now - monthly_required - ef_now)
 
     # debts sorted by APR, with months to payoff using min payments
@@ -109,7 +111,6 @@ def overview():
             "amount_monthly": round(_to_monthly(c.get("amount"), c.get("interval")), 2),
             "interval": (c.get("interval") or "monthly")
         })
-    # optional: sort by type then amount
     cost_rows.sort(key=lambda x: (x["type"] or "zzz", -x["amount_monthly"]))
 
     summary = {
@@ -121,10 +122,17 @@ def overview():
         "current_step": plan["current_step"],
     }
 
-    return render_template("overview.html",
-                           summary=summary,
-                           debts=debts_rows,
-                           costs=cost_rows)
+    # NEW: weekly roll-up (costs by type, debt mins, routing of leftover)
+    weekly = build_weekly_budget(latest, plan)
+
+    return render_template(
+        "overview.html",
+        summary=summary,
+        debts=debts_rows,
+        costs=cost_rows,
+        weekly=weekly,  # <-- add this
+        plan=plan,      # optional if your template needs current step/rationale text
+    )
 
 
 @bp.get("/plan")
