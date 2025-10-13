@@ -23,9 +23,7 @@ def view_plan():
         ttl=0
     )
 
-    step_copy = steps_cfg.get(str(plan["current_step"]), {"name": f"Step {plan['current_step']}", "description": "", "requirements": []})
-
-    print(step_copy)
+    step_copy = steps_cfg['2']
 
     # persist history (unchanged)
     ts = plan["generated_at"].replace(":", "-")
