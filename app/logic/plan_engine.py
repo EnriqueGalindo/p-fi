@@ -19,11 +19,10 @@ def view_plan():
 
     plan = compute_plan(latest)
 
-    # load step copy from GCS (with 5-minute TTL cache); fall back to LOCAL_DEFAULT_STEPS
     steps_cfg = get_json_from_gcs(
         current_app.config["GCS_BUCKET"],
         STEPS_CFG_PATH,
-        ttl=300
+        ttl=0
     )
 
     step_copy = steps_cfg.get(str(plan["current_step"]), {"name": f"Step {plan['current_step']}", "description": "", "requirements": []})
