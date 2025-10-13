@@ -2,17 +2,28 @@
 {% block content %}
 <style>
   .group{border:1px solid #e5e7eb;border-radius:12px;padding:1rem;margin:1rem 0}
-  .row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:.5rem;margin:.5rem 0;align-items:center}
-  .row.debts{grid-template-columns:2fr 1fr 1fr 1fr .6fr}
-  .row.accounts{grid-template-columns:2fr 1fr}
+  .muted{color:#6b7280}
   input,select,textarea{padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:8px}
   button.add{margin-top:.5rem}
-  .muted{color:#6b7280}
+
+  /* rows + action column (trash) */
+  .row{display:grid;gap:.5rem;margin:.5rem 0;align-items:center}
+  .row.incomes  {grid-template-columns:2fr 1fr 1fr 1fr 40px;}
+  .row.costs    {grid-template-columns:2fr 1fr 1fr 1fr 1fr 40px;}
+  .row.debts    {grid-template-columns:2fr 1fr 1fr 1fr .8fr 40px;}
+  .row.accounts {grid-template-columns:2fr 1fr 1fr 40px;}
+
+  .trash{
+    border:1px solid #e5e7eb;background:#fff;border-radius:8px;
+    padding:.4rem .55rem;cursor:pointer;line-height:1
+  }
+  .trash:hover{background:#f9fafb}
 </style>
 
 <div class="card">
   <h1>Starting Finances Questionnaire</h1>
   <form method="post" action="/onboarding">
+
     <!-- Basics -->
     <div class="group">
       <div>
@@ -29,7 +40,7 @@
           <input name="household_size" type="number" min="1" value="1"/>
         </label>
       </div>
-      <div style="margin-top:.5rem;">
+      <div style="margin-top:.75rem;">
         <label><input type="checkbox" name="has_employer_plan"> I have an employer plan with matching</label>
         <div class="muted">If yes, fill these (optional):</div>
         <input name="employer_match_pct_on_salary" placeholder="Match cap % of salary (e.g., 6)"/>
@@ -41,7 +52,7 @@
     <div class="group" id="incomes">
       <h3>Incomes — recurring sources of income</h3>
       <div class="rows" data-group="incomes">
-        <div class="row template" hidden>
+        <div class="row incomes template" hidden>
           <input name="incomes-name[]" placeholder="Name (e.g., Salary)"/>
           <input name="incomes-amount[]" placeholder="Amount (e.g., 3500)"/>
           <select name="incomes-interval[]">
@@ -54,6 +65,7 @@
             <option value="true">after-tax</option>
             <option value="false">pre-tax</option>
           </select>
+          <button type="button" class="trash" aria-label="Remove row" onclick="removeRow(event, this)">🗑</button>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('incomes')">+ Add income</button>
@@ -63,7 +75,7 @@
     <div class="group" id="costs">
       <h3>Costs — recurring expenses</h3>
       <div class="rows" data-group="costs">
-        <div class="row template" hidden>
+        <div class="row costs template" hidden>
           <input name="costs-name[]" placeholder="Name (e.g., Rent)"/>
           <input name="costs-amount[]" placeholder="Amount (e.g., 1200)"/>
           <select name="costs-interval[]">
@@ -81,11 +93,11 @@
             <option value="pet">pet</option>
             <option value="clothes">clothes</option>
           </select>
+          <button type="button" class="trash" aria-label="Remove row" onclick="removeRow(event, this)">🗑</button>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('costs')">+ Add cost</button>
     </div>
-
 
     <!-- Debts -->
     <div class="group" id="debts">
@@ -97,16 +109,13 @@
           <input name="debts-apr[]" placeholder="APR % (e.g., 24.99)"/>
           <input name="debts-min_payment[]" placeholder="Min payment (e.g., 75)"/>
           <input name="debts-due_day[]" placeholder="Due day (1-31)"/>
+          <button type="button" class="trash" aria-label="Remove row" onclick="removeRow(event, this)">🗑</button>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('debts')">+ Add debt</button>
     </div>
 
     <!-- Accounts -->
-    <style>
-      .row.accounts{grid-template-columns: 2fr 1fr 1fr}
-    </style>
-
     <div class="group" id="accounts">
       <h3>Accounts — bank/asset balances</h3>
       <div class="rows" data-group="accounts">
@@ -121,6 +130,7 @@
             <option value="investment">investment</option>
             <option value="retirement">retirement</option>
           </select>
+          <button type="button" class="trash" aria-label="Remove row" onclick="removeRow(event, this)">🗑</button>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('accounts')">+ Add account</button>
@@ -137,7 +147,7 @@
 </div>
 
 <script>
-  // Clone + append a blank row
+  // Add a row by cloning the group's hidden template
   function addRow(sectionId){
     const section = document.querySelector('#'+sectionId+' .rows');
     const tpl = section.querySelector('.template');
@@ -148,32 +158,41 @@
     return clone;
   }
 
-  // Preload from server-provided JSON
+  // Remove a row; only auto-add a blank if the group would be empty
+  function removeRow(evt, btn){
+    if (evt) evt.preventDefault();
+    const row = btn.closest('.row');
+    if (!row || row.classList.contains('template')) return;
+    row.remove(); // no auto-add when empty
+  }
+
+  // Prefill from server JSON (profile)
   (function(){
     const initial = {{ (profile or {})|tojson|safe }};
-    // Top-level fields
-    if(initial.currency){ document.querySelector('[name="currency"]').value = initial.currency; }
-    if(initial.household_size){ document.querySelector('[name="household_size"]').value = initial.household_size; }
-    if(initial.has_employer_plan){ document.querySelector('[name="has_employer_plan"]').checked = true; }
-    if(initial.employer_match_pct_on_salary){ document.querySelector('[name="employer_match_pct_on_salary"]').value = initial.employer_match_pct_on_salary; }
-    if(initial.employer_match_rate){ document.querySelector('[name="employer_match_rate"]').value = initial.employer_match_rate; }
-    if(initial.notes){ document.querySelector('[name="notes"]').value = initial.notes; }
 
-    // Helper to render array sections
-    function seedArray(sectionId, items, fillFn){
+    // top-level
+    if(initial.currency) document.querySelector('[name="currency"]').value = initial.currency;
+    if(initial.household_size) document.querySelector('[name="household_size"]').value = initial.household_size;
+    if(initial.has_employer_plan) document.querySelector('[name="has_employer_plan"]').checked = true;
+    if(initial.employer_match_pct_on_salary) document.querySelector('[name="employer_match_pct_on_salary"]').value = initial.employer_match_pct_on_salary;
+    if(initial.employer_match_rate) document.querySelector('[name="employer_match_rate"]').value = initial.employer_match_rate;
+    if(initial.notes) document.querySelector('[name="notes"]').value = initial.notes;
+
+    function seedArray(sectionId, items, fill){
       const rows = document.querySelector('#'+sectionId+' .rows');
-      rows.querySelectorAll(':scope > .row:not(.template)').forEach(n => n.remove());
+      rows.querySelectorAll(':scope > .row:not(.template)').forEach(n=>n.remove());
       if(items && items.length){
-        items.forEach(obj => {
-          const row = addRow(sectionId);
-          fillFn(row, obj);
+        items.forEach(obj=>{
+          const r = addRow(sectionId);
+          fill(r, obj);
         });
       } else {
-        addRow(sectionId); // one blank row
+        // start with one blank row for usability
+        addRow(sectionId);
       }
     }
 
-    seedArray('incomes', initial.income_streams, (row, inc)=>{
+    seedArray('incomes',  initial.income_streams, (row, inc)=>{
       row.querySelector('[name="incomes-name[]"]').value   = inc.name || '';
       row.querySelector('[name="incomes-amount[]"]').value = inc.amount ?? '';
       row.querySelector('[name="incomes-interval[]"]').value = (inc.interval || 'monthly');
@@ -184,7 +203,7 @@
       row.querySelector('[name="costs-name[]"]').value   = c.name || '';
       row.querySelector('[name="costs-amount[]"]').value = c.amount ?? '';
       row.querySelector('[name="costs-interval[]"]').value = (c.interval || 'monthly');
-      row.querySelector('[name="costs-type[]"]').value = (c.type || '');;
+      row.querySelector('[name="costs-type[]"]').value = (c.type || '');
     });
 
     seedArray('debts', initial.debts, (row, d)=>{
