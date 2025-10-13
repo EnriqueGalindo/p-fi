@@ -103,14 +103,20 @@ def compute_plan(snapshot: dict):
 
     # Helper for EF rows
     def ef_row(title, target):
+        # Cap EF progress to this step's target so the table never shows more than the goal
+        progress = min(ef_now, target)
+
         return {
             "title": title,
             "target_fund": round(target, 2),
-            "ef_now": round(ef_now, 2),  # <-- show EF based on cash_now - 1 month costs
-            "monthly_to_target": round(max(0.0, min(leftover, target - ef_now)), 2),
-            "status": ("progress" if ef_now < target and leftover >= 0
-                       else ("pass" if ef_now >= target else "blocked")),
+            "ef_now": round(progress, 2),
+            "monthly_to_target": round(max(0.0, min(leftover, target - progress)), 2),
+            "status": (
+                "progress" if progress < target and leftover >= 0
+                else ("pass" if progress >= target else "blocked")
+            ),
         }
+
 
     steps = [
         {"id":0,"title":"Budget / no deficit",
