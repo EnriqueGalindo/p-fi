@@ -44,104 +44,111 @@ def compute_plan(snapshot: dict):
     accounts= snapshot.get("accounts", []) or []
     has_match = bool(snapshot.get("has_employer_plan"))
 
-    # Income after-tax monthly (assume 75% take-home for pre-tax)
+    # Income after-tax monthly (assume 75% take-home for pre-tax streams)
     income_monthly = 0.0
     for inc in incomes:
         amt = _to_monthly(inc.get("amount"), inc.get("interval"))
         after_tax = inc.get("after_tax") in (True, "true", "True", "on")
         income_monthly += amt if after_tax else amt * 0.75
 
-    # Monthly expenses: recurring + minimum debt payments + groceries
+    # Monthly expenses = recurring + minimum debt payments + groceries
     costs_monthly = sum(_to_monthly(c.get("amount"), c.get("interval")) for c in costs)
     min_payments  = sum(float(d.get("min_payment") or 0) for d in debts)
     groceries     = 400 * hh
-    required      = costs_monthly + min_payments + groceries
-    leftover      = income_monthly - required
+    monthly_required = costs_monthly + min_payments + groceries
+    leftover      = income_monthly - monthly_required
 
-    # Debt buckets
-    hi_debts   = [d for d in debts if float(d.get("apr") or 0) >= 10 and float(d.get("balance") or 0) > 0]
-    med_debts  = [d for d in debts if 4 < float(d.get("apr") or 0) < 10 and float(d.get("balance") or 0) > 0]
+    # Debts
+    hi_debts  = [d for d in debts if float(d.get("apr") or 0) >= 10 and float(d.get("balance") or 0) > 0]
+    med_debts = [d for d in debts if 4 < float(d.get("apr") or 0) < 10 and float(d.get("balance") or 0) > 0]
 
-    # EF targets
-    monthly_expenses = required  # includes min payments + groceries, consistent with UI
-    starter_ef_target = 1000.0
-    six_month_target  = monthly_expenses * 6
-    twelve_month_target = monthly_expenses * 12
+    # Liquid cash toward EF (strict by account type)
+    cash_now = sum(float(a.get("balance") or 0) for a in accounts
+                   if (a.get("type") or "").lower() in CASH_TYPES)
 
-    # Liquid cash toward EF
-    cash_now = 0.0
-    for a in accounts:
-        atype = (a.get("type") or "").lower()
-        if atype in CASH_TYPES:
-            cash_now += float(a.get("balance") or 0)
+    # >>> NEW: EF progress is what's left after setting aside 1 month of required costs
+    ef_now = max(0.0, cash_now - monthly_required)
 
-    # Decide current step in the new order
+    # Step targets
+    starter_ef_target    = 1000.0
+    six_month_target     = monthly_required * 6
+    twelve_month_target  = monthly_required * 12
+
+    # Decide current step (unchanged ordering, but compare against ef_now)
     if leftover < 0:
         current = 0
-    elif cash_now + 1e-6 < starter_ef_target:
+    elif ef_now + 1e-6 < starter_ef_target:
         current = 1
     elif hi_debts:
         current = 2
-    elif cash_now + 1e-6 < six_month_target:
+    elif ef_now + 1e-6 < six_month_target:
         current = 3
     elif has_match:
         current = 4
     elif med_debts:
         current = 5
-    elif cash_now + 1e-6 < twelve_month_target:
+    elif ef_now + 1e-6 < twelve_month_target:
         current = 6
     else:
-        current = 7  # on to IRA and beyond
+        current = 7
 
-    hi_list = [
-        {
-            "name": (d.get("name") or ""),
-            "balance": round(float(d.get("balance") or 0), 2),
-            "apr": round(float(d.get("apr") or 0), 2),
-            "min_payment": round(float(d.get("min_payment") or 0), 2),
-        }
-        for d in hi_debts
-    ]
+    # High-interest list for Step 2 details
+    hi_list = [{
+        "name": (d.get("name") or ""),
+        "balance": round(float(d.get("balance") or 0), 2),
+        "apr": round(float(d.get("apr") or 0), 2),
+        "min_payment": round(float(d.get("min_payment") or 0), 2),
+    } for d in hi_debts]
     hi_total = round(sum(x["balance"] for x in hi_list), 2)
 
+    # Helper for EF rows
+    def ef_row(title, target):
+        return {
+            "title": title,
+            "target_fund": round(target, 2),
+            "ef_now": round(ef_now, 2),  # <-- show EF based on cash_now - 1 month costs
+            "monthly_to_target": round(max(0.0, min(leftover, target - ef_now)), 2),
+            "status": ("progress" if ef_now < target and leftover >= 0
+                       else ("pass" if ef_now >= target else "blocked")),
+        }
+
     steps = [
-        {"id":0,"title":"Budget / no deficit","status":"block" if leftover<0 else "pass",
-        "notes":[f"Leftover: ${leftover:,.2f}", f"Required monthly: ${required:,.2f}"]},
+        {"id":0,"title":"Budget / no deficit",
+         "status":"block" if leftover<0 else "pass",
+         "notes":[f"Leftover: ${leftover:,.2f}", f"Required monthly: ${monthly_required:,.2f}"]},
 
-        {"id":1,"title":"Starter EF $1,000","target_fund":round(starter_ef_target,2),
-        "cash_now":round(cash_now,2),"monthly_to_target":round(max(0.0, min(leftover, starter_ef_target - cash_now)),2),
-        "status":"progress" if cash_now < starter_ef_target and leftover>=0 else ("pass" if cash_now >= starter_ef_target else "blocked")},
+        dict({"id":1}, **ef_row("Starter EF $1,000", starter_ef_target)),
 
-        # ↓↓ this is the updated Step 2 ↓↓
         {"id":2,"title":"Pay off high-interest debts (≥10% APR)",
-        "status": "info" if hi_debts else "pass",
-        "debts": hi_list,
-        "debts_total": hi_total},
+         "status":"info" if hi_debts else "pass",
+         "debts": hi_list, "debts_total": hi_total},
 
-        {"id":3,"title":"6-month emergency fund","target_fund":round(six_month_target,2),
-        "cash_now":round(cash_now,2),"monthly_to_target":round(max(0.0, min(leftover, six_month_target - cash_now)),2),
-        "status":"progress" if cash_now < six_month_target and leftover>=0 else ("pass" if cash_now >= six_month_target else "blocked")},
+        dict({"id":3}, **ef_row("6-month emergency fund", six_month_target)),
 
         {"id":4,"title":"Capture employer match","status":"info" if has_match else "skip"},
-        {"id":5,"title":"Pay down medium-interest debts (4%–<10%)","status":"info" if med_debts else "pass"},
-        {"id":6,"title":"12-month emergency fund","target_fund":round(twelve_month_target,2),
-        "cash_now":round(cash_now,2),"monthly_to_target":round(max(0.0, min(leftover, twelve_month_target - cash_now)),2),
-        "status":"progress" if cash_now < twelve_month_target and leftover>=0 else ("pass" if cash_now >= twelve_month_target else "blocked")},
+
+        {"id":5,"title":"Pay down medium-interest debts (4%–<10%)",
+         "status":"info" if med_debts else "pass"},
+
+        dict({"id":6}, **ef_row("12-month emergency fund", twelve_month_target)),
+
         {"id":7,"title":"Contribute to an IRA","status":"info"},
         {"id":8,"title":"Save more for retirement","status":"info"},
         {"id":9,"title":"Save for other goals","status":"info"},
     ]
 
     return {
-        "generated_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generated_at": dt.datetime.utcnow().isoformat(timespec="seconds")+"Z",
         "based_on_snapshot_at": snapshot.get("snapshot_at"),
         "household_size": hh,
         "monthly": {
             "income_after_tax": round(income_monthly, 2),
-            "required_expenses": round(required, 2),
+            "required_expenses": round(monthly_required, 2),
             "groceries_allowance": round(groceries, 2),
             "leftover": round(leftover, 2),
         },
+        "cash_now": round(cash_now, 2),
+        "ef_now": round(ef_now, 2),  # <-- expose for other pages if you want
         "current_step": current,
         "steps": steps
     }

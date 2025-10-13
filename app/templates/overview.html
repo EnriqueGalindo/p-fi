@@ -1,0 +1,49 @@
+{% extends "base.html" %}{% block content %}
+<div class="card">
+  <h1>Overview</h1>
+
+  <h3>Emergency Fund</h3>
+<p>
+  Cash now: <b>${{ '%.2f'|format(summary.cash_now) }}</b><br/>
+  Current EF (cash − 1 mo costs, capped by step): <b>${{ '%.2f'|format(summary.ef_now) }}</b>
+  <span class="muted"> (target {{ '%.2f'|format(summary.ef_target) }})</span><br/>
+  Available (extra after 1 mo costs + step EF): <b>${{ '%.2f'|format(summary.available) }}</b><br/>
+  One-month required costs: <span class="muted">${{ '%.2f'|format(summary.monthly_required) }}</span>
+</p>
+
+
+  <h3>Debts (by APR)</h3>
+  <table>
+    <thead><tr><th>Name</th><th>Balance</th><th>APR</th><th>Min/mo</th><th>Months (min-only)</th></tr></thead>
+    <tbody>
+      {% for d in debts %}
+      <tr>
+        <td>{{ d.name }}</td>
+        <td>${{ '%.2f'|format(d.balance) }}</td>
+        <td>{{ '%.2f'|format(d.apr) }}%</td>
+        <td>${{ '%.2f'|format(d.min_payment) }}</td>
+        <td>
+          {% if d.months_to_payoff is none %}∞ (payment too small)
+          {% else %}{{ d.months_to_payoff }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:1rem;">Recurring Costs</h3>
+  <table>
+    <thead><tr><th>Type</th><th>Name</th><th>Monthly</th><th>Interval</th></tr></thead>
+    <tbody>
+      {% for c in costs %}
+      <tr>
+        <td>{{ c.type or '—' }}</td>
+        <td>{{ c.name }}</td>
+        <td>${{ '%.2f'|format(c.amount_monthly) }}</td>
+        <td class="muted">{{ c.interval }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
