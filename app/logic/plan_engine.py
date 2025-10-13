@@ -1,7 +1,6 @@
 import datetime as dt
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, url_for
-from ..logic.plan_engine import compute_plan
 from ..services.utils import get_json_from_gcs
 
 MONTH_FACTORS = {"monthly":1, "biweekly":26/12, "weekly":52/12, "annual":1/12}
