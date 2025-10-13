@@ -69,9 +69,9 @@ def overview():
     # current-step EF target
     six_target = monthly_required * 6
     twelve_target = monthly_required * 12
-    if plan["current_step"] <= 1:
+    if plan["current_step"] <= 2:
         ef_target = 1000.0
-    elif plan["current_step"] <= 3:
+    elif plan["current_step"] <= 5:
         ef_target = six_target
     elif plan["current_step"] <= 6:
         ef_target = twelve_target
@@ -114,7 +114,8 @@ def overview():
 
     summary = {
         "cash_now": round(cash_now, 2),
-        "ef_required": round(ef_required, 2),
+        "ef_now": round(ef_now, 2),
+        "ef_target": round(ef_target, 2),
         "available": round(available, 2),
         "monthly_required": round(monthly_required, 2),
         "current_step": plan["current_step"],
