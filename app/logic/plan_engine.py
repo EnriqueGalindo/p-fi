@@ -6,8 +6,6 @@ from ..services.utils import get_json_from_gcs
 MONTH_FACTORS = {"monthly":1, "biweekly":26/12, "weekly":52/12, "annual":1/12}
 CASH_TYPES = {"cash", "checking", "savings"}
 
-STEPS_CFG_PATH = "config/plan_steps.json"  # you can change via env later if you want
-
 bp = Blueprint("plan", __name__, url_prefix="")
 
 @bp.get("/plan")
@@ -20,8 +18,8 @@ def view_plan():
     plan = compute_plan(latest)
 
     steps_cfg = get_json_from_gcs(
-        current_app.config["GCS_BUCKET"],
-        STEPS_CFG_PATH,
+        "pfi-datalake",
+        "config/plan_steps.json",
         ttl=0
     )
 
