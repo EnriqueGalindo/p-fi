@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Ledger</h1>
+  <p><a href="/ledger/new">+ Add entry</a></p>
+  <table>
+    <thead>
+      <tr>
+        <th>When</th>
+        <th>Type</th>
+        <th>Amount</th>
+        <th>From</th>
+        <th>To / Debt</th>
+        <th>Category</th>
+        <th>Balance</th>  <!-- NEW -->
+        <th>Note</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in ledger %}
+      <tr>
+        <td class="muted">{{ t.ts }}</td>
+        <td>{{ t.kind }}</td>
+        <td>${{ '%.2f'|format(t.amount or 0) }}</td>
+        <td>{{ t.from_account or '—' }}</td>
+        <td>{{ t.to_account or t.debt_name or '—' }}</td>
+        <td>{{ t.category or '—' }}</td>
+
+        <!-- NEW balance logic -->
+        <td>
+          {% if t.balance_kind == 'account' %}
+            {{ t.balance_name }}: ${{ '%.2f'|format(t.balance_after or 0) }}
+          {% elif t.balance_kind == 'debt' %}
+            {{ t.balance_name }}: ${{ '%.2f'|format(t.balance_after or 0) }}
+          {% elif t.balance_kind == 'transfer' %}
+            {{ t.balance_name_from }}: ${{ '%.2f'|format(t.balance_after_from or 0) }}
+            → {{ t.balance_name_to }}: ${{ '%.2f'|format(t.balance_after_to or 0) }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+
+        <td>{{ t.note or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

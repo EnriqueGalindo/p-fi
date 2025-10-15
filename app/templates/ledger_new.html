@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .group{border:1px solid #e5e7eb;border-radius:12px;padding:1rem;margin:1rem 0}
+  .row{display:grid;grid-template-columns:1fr 2fr;gap:.5rem;align-items:center;margin:.4rem 0}
+  input,select,textarea{padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:8px}
+  .muted{color:#6b7280}
+</style>
+
+<div class="card">
+  <h1>Add ledger entry</h1>
+  <form method="post" action="/ledger/new" id="txForm">
+    <div class="group">
+      <div class="row">
+        <label>Type</label>
+        <select name="kind" id="kind">
+          <option value="expense">Expense</option>
+          <option value="debt_payment">Debt payment</option>
+          <option value="transfer">Transfer (account → account)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Amount</label>
+        <input name="amount" type="number" step="0.01" placeholder="0.00" required>
+      </div>
+      <div class="row">
+        <label>Note</label>
+        <input name="note" placeholder="optional memo">
+      </div>
+    </div>
+
+    <div class="group" id="expenseFields">
+      <div class="row">
+        <label>From account</label>
+        <select name="from_account">
+          <option value="">-- choose --</option>
+          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <label>Category</label>
+        <select name="category">
+          <option value="grocery">grocery</option>
+          <option value="entertainment">entertainment</option>
+          <option value="utility">utility</option>
+          <option value="pet">pet</option>
+          <option value="clothes">clothes</option>
+          <option value="health_fitness">health/fitness</option>
+          <option value="other" selected>other</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group" id="transferFields" hidden>
+      <div class="row">
+        <label>From account</label>
+        <select name="from_account">
+          <option value="">-- choose --</option>
+          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <label>To account</label>
+        <select name="to_account">
+          <option value="">-- choose --</option>
+          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="group" id="debtFields" hidden>
+      <div class="row">
+        <label>Pay from account</label>
+        <select name="from_account">
+          <option value="">-- choose --</option>
+          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <label>Debt</label>
+        <select name="debt_name">
+          <option value="">-- choose debt --</option>
+          {% for d in debts %}<option>{{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <label>Principal portion (optional)</label>
+        <input name="principal_portion" type="number" step="0.01" placeholder="defaults to full amount">
+      </div>
+      <div class="row">
+        <label>Interest portion (optional)</label>
+        <input name="interest_portion" type="number" step="0.01" placeholder="0.00">
+      </div>
+      <div class="row" style="grid-column:1/-1">
+        <small class="muted">If you leave principal/interest blank, we’ll apply 100% to principal (good for revolving/other).</small>
+      </div>
+    </div>
+
+    <button type="submit">Save entry</button>
+  </form>
+</div>
+
+<script>
+  const kind = document.getElementById('kind');
+  const expenseFields  = document.getElementById('expenseFields');
+  const transferFields = document.getElementById('transferFields');
+  const debtFields     = document.getElementById('debtFields');
+
+  function toggleSections() {
+    const v = kind.value;
+    expenseFields.hidden  = v !== 'expense';
+    transferFields.hidden = v !== 'transfer';
+    debtFields.hidden     = v !== 'debt_payment';
+  }
+  kind.addEventListener('change', toggleSections);
+  toggleSections();
+</script>
+{% endblock %}

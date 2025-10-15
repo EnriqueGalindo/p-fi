@@ -1,7 +1,8 @@
 # app/__init__.py
 import os
-from flask import Flask
+from flask import Flask, app
 from .services.gcs import GcsStore
+
 
 def create_app():
     app = Flask(__name__)
@@ -17,6 +18,8 @@ def create_app():
     # register blueprints
     from .blueprints.onboarding import bp as onboarding_bp
     from .blueprints.plan import bp as plan_bp
+    from .blueprints.ledger import bp as ledger_bp
+    app.register_blueprint(ledger_bp)
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(plan_bp)
 
