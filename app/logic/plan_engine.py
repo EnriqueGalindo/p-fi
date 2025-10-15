@@ -98,6 +98,7 @@ def simulate_debt_payoff(
     remaining_lump = max(0.0, float(lump_sum or 0))
     lump_applied = 0.0
     i = 0
+    pay = 0
     while remaining_lump > 1e-8 and i < len(items):
         pay = min(items[i]["balance_temp"], remaining_lump)
         items[i]["balance_temp"] -= pay

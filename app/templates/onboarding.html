@@ -10,7 +10,8 @@
   .row{display:grid;gap:.5rem;margin:.5rem 0;align-items:center}
   .row.incomes  {grid-template-columns:2fr 1fr 1fr 1fr 40px;}
   .row.costs    {grid-template-columns:2fr 1fr 1fr 1fr 1fr 40px;}
-  .row.debts    {grid-template-columns:2fr 1fr 1fr 1fr .8fr 40px;}
+  /* name, bal, apr, min, due_day, type, trash */
+  .row.debts    {grid-template-columns:2fr 1fr 1fr 1fr .7fr 1fr 40px;}
   .row.accounts {grid-template-columns:2fr 1fr 1fr 40px;}
 
   .trash{
@@ -104,12 +105,32 @@
       <h3>Debts — outstanding debts</h3>
       <div class="rows" data-group="debts">
         <div class="row debts template" hidden>
-          <input name="debts-name[]" placeholder="Name (e.g., Visa)"/>
+          <input name="debts-name[]" placeholder="Name (e.g., Visa or Mortgage)"/>
           <input name="debts-balance[]" placeholder="Balance (e.g., 2300)"/>
           <input name="debts-apr[]" placeholder="APR % (e.g., 24.99)"/>
           <input name="debts-min_payment[]" placeholder="Min payment (e.g., 75)"/>
           <input name="debts-due_day[]" placeholder="Due day (1-31)"/>
+
+          <!-- Type -->
+          <select name="debts-type[]" class="debt-type">
+            <option value="revolving" selected>revolving</option>
+            <option value="mortgage">mortgage</option>
+            <option value="other">other</option>
+          </select>
+
           <button type="button" class="trash" aria-label="Remove row" onclick="removeRow(event, this)">🗑</button>
+
+          <!-- Mortgage-only fields (full width) -->
+          <div class="mortgage-extra" style="display:none; grid-column: 1 / -1;">
+            <div class="row" style="grid-template-columns: repeat(3, 1fr);">
+              <input name="debts-escrow[]" placeholder="Escrow portion /mo (e.g., 400)"/>
+              <input name="debts-interest_portion[]" placeholder="Interest portion /mo (e.g., 950)"/>
+              <input name="debts-principal_portion[]" placeholder="Principal portion /mo (e.g., 650)"/>
+            </div>
+            <div class="muted" style="margin-top:.25rem;">
+              Tip: enter your latest statement’s split. We’ll use it to improve payoff estimates.
+            </div>
+          </div>
         </div>
       </div>
       <button type="button" class="add" onclick="addRow('debts')">+ Add debt</button>
@@ -147,7 +168,7 @@
 </div>
 
 <script>
-  // Add a row by cloning the group's hidden template
+  // --- helpers ---
   function addRow(sectionId){
     const section = document.querySelector('#'+sectionId+' .rows');
     const tpl = section.querySelector('.template');
@@ -155,18 +176,40 @@
     clone.hidden = false;
     clone.classList.remove('template');
     section.appendChild(clone);
+    // Wire debt toggles when adding debt rows
+    if (sectionId === 'debts') wireDebtRow(clone);
     return clone;
   }
 
-  // Remove a row; only auto-add a blank if the group would be empty
   function removeRow(evt, btn){
     if (evt) evt.preventDefault();
     const row = btn.closest('.row');
     if (!row || row.classList.contains('template')) return;
-    row.remove(); // no auto-add when empty
+    row.remove();
   }
 
-  // Prefill from server JSON (profile)
+  function wireDebtRow(row){
+    const typeSel = row.querySelector('.debt-type');
+    const extra   = row.querySelector('.mortgage-extra');
+    const toggle = () => { if (extra) extra.style.display = (typeSel?.value === 'mortgage') ? '' : 'none'; };
+    if (typeSel) typeSel.addEventListener('change', toggle);
+    toggle();
+  }
+
+  function seedArray(sectionId, items, fill){
+    const rows = document.querySelector('#'+sectionId+' .rows');
+    rows.querySelectorAll(':scope > .row:not(.template)').forEach(n=>n.remove());
+    if(items && items.length){
+      items.forEach(obj=>{
+        const r = addRow(sectionId);
+        fill(r, obj);
+      });
+    } else {
+      addRow(sectionId); // one blank row for usability
+    }
+  }
+
+  // --- preload from server JSON ---
   (function(){
     const initial = {{ (profile or {})|tojson|safe }};
 
@@ -178,20 +221,7 @@
     if(initial.employer_match_rate) document.querySelector('[name="employer_match_rate"]').value = initial.employer_match_rate;
     if(initial.notes) document.querySelector('[name="notes"]').value = initial.notes;
 
-    function seedArray(sectionId, items, fill){
-      const rows = document.querySelector('#'+sectionId+' .rows');
-      rows.querySelectorAll(':scope > .row:not(.template)').forEach(n=>n.remove());
-      if(items && items.length){
-        items.forEach(obj=>{
-          const r = addRow(sectionId);
-          fill(r, obj);
-        });
-      } else {
-        // start with one blank row for usability
-        addRow(sectionId);
-      }
-    }
-
+    // incomes
     seedArray('incomes',  initial.income_streams, (row, inc)=>{
       row.querySelector('[name="incomes-name[]"]').value   = inc.name || '';
       row.querySelector('[name="incomes-amount[]"]').value = inc.amount ?? '';
@@ -199,6 +229,7 @@
       row.querySelector('[name="incomes-after_tax[]"]').value = (inc.after_tax ? 'true' : 'false');
     });
 
+    // costs
     seedArray('costs', initial.recurring_costs, (row, c)=>{
       row.querySelector('[name="costs-name[]"]').value   = c.name || '';
       row.querySelector('[name="costs-amount[]"]').value = c.amount ?? '';
@@ -206,14 +237,28 @@
       row.querySelector('[name="costs-type[]"]').value = (c.type || '');
     });
 
+    // debts (type + mortgage extras)
     seedArray('debts', initial.debts, (row, d)=>{
-      row.querySelector('[name="debts-name[]"]').value = d.name || '';
-      row.querySelector('[name="debts-balance[]"]').value = d.balance ?? '';
-      row.querySelector('[name="debts-apr[]"]').value = d.apr ?? '';
-      row.querySelector('[name="debts-min_payment[]"]').value = d.min_payment ?? '';
-      row.querySelector('[name="debts-due_day[]"]').value = d.due_day ?? '';
+      const set = (sel, val) => { const el = row.querySelector(sel); if (el) el.value = (val ?? ''); };
+
+      set('[name="debts-name[]"]', d.name);
+      set('[name="debts-balance[]"]', d.balance);
+      set('[name="debts-apr[]"]', d.apr);
+      set('[name="debts-min_payment[]"]', d.min_payment);
+      set('[name="debts-due_day[]"]', d.due_day);
+
+      const type = (d.type || 'revolving').toLowerCase();
+      set('[name="debts-type[]"]', type);
+      wireDebtRow(row); // show mortgage block if needed
+
+      if (type === 'mortgage') {
+        set('[name="debts-escrow[]"]', d.escrow);
+        set('[name="debts-interest_portion[]"]', d.interest_portion);
+        set('[name="debts-principal_portion[]"]', d.principal_portion);
+      }
     });
 
+    // accounts
     seedArray('accounts', initial.accounts, (row, a)=>{
       row.querySelector('[name="accounts-name[]"]').value = a.name || '';
       row.querySelector('[name="accounts-balance[]"]').value = a.balance ?? '';

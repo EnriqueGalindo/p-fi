@@ -60,9 +60,17 @@ def onboarding_submit():
     costs   = collect_group("costs",
                             ["name","amount","interval","type"],
                             {"amount": float})
-    debts   = collect_group("debts",
-                            ["name","balance","apr","min_payment","due_day"],
-                            {"balance": float, "apr": float, "min_payment": float, "due_day": int})
+    debts = collect_group("debts",
+                            ["name","balance","apr","min_payment","due_day","type",
+                            "escrow","interest_portion","principal_portion"],
+                            {"balance": float,
+                                "apr": float,
+                                "min_payment": float,
+                                "due_day": int,
+                                "escrow": float,
+                                "interest_portion": float,
+                                "principal_portion": float})
+
     accounts = collect_group("accounts",
                             ["name", "balance", "type"],
                             {"balance": float})
