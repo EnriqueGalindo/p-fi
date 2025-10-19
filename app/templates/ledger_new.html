@@ -12,6 +12,7 @@
 
   <form method="post" action="{{ url_for('ledger.create_entry') }}" id="txForm">
     <!-- Canonical hidden fields the server expects -->
+    <input type="hidden" name="ts_date" id="canon_date">  <!-- NEW -->
     <input type="hidden" name="kind" id="canon_kind">
     <input type="hidden" name="amount" id="canon_amount">
     <input type="hidden" name="note" id="canon_note">
@@ -27,6 +28,12 @@
 
     <!-- Common fields (user-facing) -->
     <div class="group">
+      <!-- NEW: Date -->
+      <div class="row">
+        <label>Date</label>
+        <input id="ts_date_display" type="date" value="{{ today or '' }}">
+      </div>
+
       <div class="row">
         <label>Type</label>
         <select id="kind">
@@ -152,6 +159,7 @@
   const kindSel   = document.getElementById('kind');
   const amountInp = document.getElementById('amount');
   const noteInp   = document.getElementById('note');
+  const dateInp   = document.getElementById('ts_date_display'); // NEW
 
   const expenseFields  = document.getElementById('expenseFields');
   const transferFields = document.getElementById('transferFields');
@@ -179,6 +187,7 @@
 
   // Canonical hidden inputs
   const canon = {
+    date:       document.getElementById('canon_date'), // NEW
     kind:       document.getElementById('canon_kind'),
     amount:     document.getElementById('canon_amount'),
     note:       document.getElementById('canon_note'),
@@ -216,6 +225,7 @@
   function mapToCanon() {
     const k = kindSel.value;
 
+    canon.date.value  = dateInp.value || '';         // NEW: map date
     canon.kind.value   = k;
     canon.amount.value = amountInp.value || '';
     canon.note.value   = noteInp.value || '';
@@ -237,12 +247,12 @@
       canon.from.value = transferFrom.value || '';
       canon.to.value   = transferTo.value   || '';
     } else if (k === 'debt_payment') {
-      canon.from.value     = debtFrom.value || '';
-      canon.debt.value     = debtName.value || '';
+      canon.from.value      = debtFrom.value || '';
+      canon.debt.value      = debtName.value || '';
       canon.principal.value = debtPrin.value || '';
       canon.interest.value  = debtInt.value  || '';
     } else if (k === 'income') {
-      canon.to.value       = incomeTo.value || '';
+      canon.to.value         = incomeTo.value || '';
       canon.income_sub.value = incomeSubtype.value || 'other';
       canon.income_src.value = incomeSource.value  || '';
     }
@@ -252,9 +262,7 @@
   showSection();
 
   document.getElementById('txForm').addEventListener('submit', (e) => {
-    // map to canonical before real submit
     mapToCanon();
-    // let HTML5 required do its work based on visible section
   });
 </script>
 {% endblock %}

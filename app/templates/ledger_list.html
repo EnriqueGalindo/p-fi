@@ -1,9 +1,103 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+  .dash {border:1px solid #e5e7eb;border-radius:12px;padding:1rem;margin:1rem 0}
+  .dash h2{margin:.2rem 0 1rem}
+  .dash .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+  .muted{color:#6b7280}
+  .tagbar a{margin-right:.5rem;text-decoration:none;padding:.25rem .5rem;border:1px solid #e5e7eb;border-radius:999px}
+  .tagbar a.active{background:#111827;color:#fff;border-color:#111827}
+  .mini-table{width:100%;border-collapse:collapse}
+  .mini-table th,.mini-table td{border-bottom:1px solid #f1f5f9;padding:.35rem .25rem;text-align:left}
+</style>
+
 <div class="card">
   <h1>Ledger</h1>
-  <p><a href="/ledger/new">+ Add entry</a></p>
 
+  <!-- DASHBOARD -->
+  <div class="dash">
+    <div class="tagbar" style="margin-bottom:.5rem">
+      {% set p = (stats.period or 'month') %}
+      <a href="{{ url_for('ledger.list_entries', period='week') }}" class="{{ 'active' if p=='week' else '' }}">Week</a>
+      <a href="{{ url_for('ledger.list_entries', period='month') }}" class="{{ 'active' if p=='month' else '' }}">Month</a>
+      <a href="{{ url_for('ledger.list_entries', period='year') }}" class="{{ 'active' if p=='year' else '' }}">Year</a>
+      <a href="{{ url_for('ledger.list_entries', period='all') }}" class="{{ 'active' if p=='all' else '' }}">All time</a>
+    </div>
+    <div class="muted" style="margin-bottom:.75rem">
+      Window: {{ stats.window.start }} → {{ stats.window.end }}
+    </div>
+
+    <div class="grid">
+      <!-- Money In -->
+      <div>
+        <h2>Money in</h2>
+        <div style="font-size:1.4rem;font-weight:700;">
+          ${{ '%.2f'|format(stats.totals.income or 0) }}
+        </div>
+      </div>
+
+      <!-- Expenses (total + by category) -->
+      <div>
+        <h2>Expenses</h2>
+        <div style="font-size:1.1rem;font-weight:600;margin-bottom:.3rem;">
+          Total: ${{ '%.2f'|format(stats.totals.expenses or 0) }}
+        </div>
+        <table class="mini-table">
+          <thead><tr><th>Category</th><th style="text-align:right;">Amount</th></tr></thead>
+          <tbody>
+            {% for cat, amt in (stats.totals.expenses_by_category or {}).items()|sort %}
+              <tr>
+                <td>{{ cat }}</td>
+                <td style="text-align:right;">${{ '%.2f'|format(amt or 0) }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="2" class="muted">No expenses in this window.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Debt payments + impacted debts -->
+      <div>
+        <h2>Debt payments</h2>
+        <div style="font-size:1.1rem;font-weight:600;margin-bottom:.3rem;">
+          Total to debt: ${{ '%.2f'|format(stats.totals.debt_paid or 0) }}
+        </div>
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>Debt</th>
+              <th style="text-align:right;">Paid</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for d in stats.debts_impacted %}
+            <tr>
+              <td>
+                <div style="font-weight:600">{{ d.name or '—' }}</div>
+                <div class="muted" style="font-size:.85rem;">
+                  {{ d.first_ts }} → {{ d.last_ts }}
+                </div>
+                {% if d.balance_before is not none and d.balance_after is not none %}
+                  <div class="muted" style="font-size:.85rem;">
+                    ${{ '%.2f'|format(d.balance_before) }} → ${{ '%.2f'|format(d.balance_after) }}
+                  </div>
+                {% endif %}
+              </td>
+              <td style="text-align:right;">${{ '%.2f'|format(d.total_paid or 0) }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="2" class="muted">No debt payments in this window.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p><a href="{{ url_for('ledger.new_entry_form') }}">+ Add entry</a></p>
+
+  <!-- Existing ledger table -->
   <table>
     <thead>
       <tr>
@@ -15,7 +109,7 @@
         <th>Category</th>
         <th>Balance</th>
         <th>Note</th>
-        <th style="width:48px; text-align:right;">&nbsp;</th>  <!-- Actions -->
+        <th style="width:48px; text-align:right;">&nbsp;</th>
       </tr>
     </thead>
     <tbody>
@@ -28,7 +122,6 @@
         <td>{{ t.to_account or t.debt_name or '—' }}</td>
         <td>{{ t.category or '—' }}</td>
 
-        <!-- Balance display -->
         <td>
           {% if t.balance_kind == 'account' %}
             {{ t.balance_name }}: ${{ '%.2f'|format(t.balance_after or 0) }}
@@ -44,7 +137,6 @@
 
         <td>{{ t.note or '' }}</td>
 
-        <!-- Actions: delete -->
         <td style="text-align:right;">
           {% if t.id %}
           <form method="post"
@@ -53,12 +145,9 @@
                 style="display:inline;">
             <button type="submit"
                     title="Delete"
-                    style="border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:.3rem .5rem;cursor:pointer">
-              🗑
-            </button>
+                    style="border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:.3rem .5rem;cursor:pointer">🗑</button>
           </form>
           {% else %}
-            <!-- no id to delete -->
             —
           {% endif %}
         </td>

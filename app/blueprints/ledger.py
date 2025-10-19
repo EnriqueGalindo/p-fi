@@ -2,6 +2,8 @@
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, abort
 import datetime as dt
 from ..logic.ledger import apply_transaction, reverse_transaction
+from ..logic.ledger_stats import compute_ledger_stats
+
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
 
@@ -41,10 +43,18 @@ def _append_index(user_id: str, entry: dict):
 @bp.get("/")
 def list_entries():
     user_id = current_app.config["USER_ID"]
-    latest = current_app.gcs.read_json(f"{_prefix(user_id)}latest.json") or {}
-    index  = current_app.gcs.read_json(f"{_prefix(user_id)}ledger/index.json") or []
-    index = sorted(index, key=lambda x: x.get("ts",""), reverse=True)[:100]
-    return render_template("ledger_list.html", profile=latest, ledger=index)
+    store   = current_app.gcs
+    latest  = store.read_json(f"{_prefix(user_id)}latest.json") or {}
+    index   = store.read_json(f"{_prefix(user_id)}ledger/index.json") or []
+    index   = sorted(index, key=lambda x: x.get("ts",""), reverse=True)[:100]
+
+    period = (request.args.get("period") or "month").lower()  # week|month|year|all
+    stats = compute_ledger_stats(store, user_id, period)
+
+    return render_template("ledger_list.html",
+                           profile=latest,
+                           ledger=index,
+                           stats=stats)
 
 @bp.get("/new")
 def new_entry_form():
@@ -52,7 +62,8 @@ def new_entry_form():
     latest = current_app.gcs.read_json(f"{_prefix(user_id)}latest.json") or {}
     accounts = latest.get("accounts", []) or []
     debts    = latest.get("debts", []) or []
-    return render_template("ledger_new.html", accounts=accounts, debts=debts)
+    today = dt.datetime.utcnow().date().isoformat()  # YYYY-MM-DD
+    return render_template("ledger_new.html", accounts=accounts, debts=debts, today=today)
 
 @bp.post("/new")
 def create_entry():
@@ -60,22 +71,38 @@ def create_entry():
     store   = current_app.gcs
     latest  = store.read_json(f"{_prefix(user_id)}latest.json") or {}
 
+    # basic fields
     kind   = (request.form.get("kind") or "").lower()
     amount = float(request.form.get("amount") or 0)
-    note   = request.form.get("note", "").strip()
+    note   = (request.form.get("note") or "").strip()
+
+    # optional date coming from the form (hidden canon_date)
+    ts_date = (request.form.get("ts_date") or "").strip()
+
+    # Build a timestamp for sorting/reporting:
+    # - if user gave a date like "2025-10-19", use midnight UTC of that day
+    # - if they provided a full ISO with time, respect it (append Z if missing)
+    ts_now = _now_iso()
+    ts = ts_now
+    if ts_date:
+        if "T" in ts_date:
+            ts = ts_date if ts_date.endswith("Z") else f"{ts_date}Z"
+        else:
+            # date-only -> midnight UTC
+            ts = f"{ts_date}T00:00:00Z"
 
     tx = {
-        "id": _now_iso(),
-        "ts": _now_iso(),
-        "kind": kind,                # expense | debt_payment | transfer | income
+        "id": ts_now,      # unique id (keep as 'now' so it doesn't collide)
+        "ts": ts,          # user-selected timestamp (or now if none)
+        "kind": kind,      # expense | debt_payment | transfer | income
         "amount": amount,
         "note": note,
 
         # shared names set by the visible section (thanks to the JS)
-        "from_account": request.form.get("from_account") or None,
-        "to_account": request.form.get("to_account") or None,
-        "category": request.form.get("category") or None,
-        "debt_name": request.form.get("debt_name") or None,
+        "from_account": (request.form.get("from_account") or None),
+        "to_account": (request.form.get("to_account") or None),
+        "category": (request.form.get("category") or None),
+        "debt_name": (request.form.get("debt_name") or None),
 
         # debt optional splits
         "principal_portion": request.form.get("principal_portion") or None,
@@ -86,6 +113,7 @@ def create_entry():
         "income_source": request.form.get("income_source") or None,
     }
 
+    # coerce optional numeric splits
     for k in ("principal_portion", "interest_portion"):
         v = tx.get(k)
         if v not in (None, "",):
@@ -94,9 +122,9 @@ def create_entry():
             except Exception:
                 tx[k] = None
 
+    # apply + persist
     updated, entry = apply_transaction(latest, tx)
 
-    # persist immutable entry + new snapshot
     entry_path = f"{_prefix(user_id)}ledger/entries/{entry['id'].replace(':','-')}.json"
     store.write_json(entry_path, entry)
     _append_index(user_id, entry)
