@@ -67,16 +67,25 @@ def create_entry():
     tx = {
         "id": _now_iso(),
         "ts": _now_iso(),
-        "kind": kind,                # expense | debt_payment | transfer
+        "kind": kind,                # expense | debt_payment | transfer | income
         "amount": amount,
         "note": note,
+
+        # shared names set by the visible section (thanks to the JS)
         "from_account": request.form.get("from_account") or None,
         "to_account": request.form.get("to_account") or None,
         "category": request.form.get("category") or None,
         "debt_name": request.form.get("debt_name") or None,
+
+        # debt optional splits
         "principal_portion": request.form.get("principal_portion") or None,
         "interest_portion": request.form.get("interest_portion") or None,
+
+        # income extras
+        "income_subtype": request.form.get("income_subtype") or None,  # paystub | refund | other
+        "income_source": request.form.get("income_source") or None,
     }
+
     for k in ("principal_portion", "interest_portion"):
         v = tx.get(k)
         if v not in (None, "",):

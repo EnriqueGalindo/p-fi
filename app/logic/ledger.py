@@ -22,7 +22,14 @@ def apply_transaction(snapshot: dict, tx: dict):
     """
     Returns (updated_snapshot, entry)
     entry will also include balance fields for display.
+
+    Supported kinds:
+      - expense        : from_account -amount
+      - transfer       : from_account -amount  AND  to_account +amount
+      - debt_payment   : from_account -amount  AND  debt balance -principal_portion
+      - income         : to_account +amount  (subtype via income_subtype)
     """
+    # shallow copy of top-level + list containers (items inside will be mutated)
     snap = {**snapshot}
     accounts = list(snap.get("accounts", []) or [])
     debts    = list(snap.get("debts", []) or [])
@@ -33,18 +40,25 @@ def apply_transaction(snapshot: dict, tx: dict):
     entry = dict(tx)  # make a copy to persist immutably
     entry.setdefault("meta", {})
 
+    # ------------- helpers -------------
+    def _norm(s):
+        return (s or "").strip()
+
     def find_account(name):
+        n = _norm(name)
         for a in accounts:
-            if (a.get("name") or "") == (name or ""):
+            if _norm(a.get("name")) == n:
                 return a
         return None
 
     def find_debt(name):
+        n = _norm(name)
         for d in debts:
-            if (d.get("name") or "") == (name or ""):
+            if _norm(d.get("name")) == n:
                 return d
         return None
 
+    # ------------- kinds -------------
     if kind == "expense":
         acc = find_account(tx.get("from_account"))
         if not acc:
@@ -80,20 +94,42 @@ def apply_transaction(snapshot: dict, tx: dict):
         # apply to debt (default: all principal)
         principal = float(tx.get("principal_portion") or amount)
         interest  = float(tx.get("interest_portion") or 0.0)
+        # guardrail: never allocate more than amount
         if principal + interest > amount + 1e-9:
-            principal = amount  # guardrail
+            principal = amount
 
         debt["balance"] = max(0.0, float(debt.get("balance") or 0) - principal)
 
         entry["balance_kind"]  = "debt"
         entry["balance_name"]  = debt.get("name")
         entry["balance_after"] = round(float(debt["balance"]), 2)
-        entry["account_after"] = round(float(acc["balance"]), 2)  # optional: from-account new bal for reference
+        entry["account_after"] = round(float(acc["balance"]), 2)  # from-account new bal for reference
+
+    elif kind == "income":
+        # Deposit into destination account
+        dst = find_account(tx.get("to_account"))
+        if not dst:
+            raise ValueError("Account not found for income (to_account)")
+        before = float(dst.get("balance") or 0)
+        after  = before + amount
+        dst["balance"] = after
+
+        entry["balance_kind"]  = "account"
+        entry["balance_name"]  = dst.get("name")
+        entry["balance_after"] = round(after, 2)
+
+        # For the ledger list, show the subtype in your Category column
+        # (e.g., paystub, refund, other)
+        subtype = (tx.get("income_subtype") or "other").lower()
+        entry["category"] = subtype
+        # Normalize fields that don't apply
+        entry["from_account"] = None
+        entry["debt_name"]    = None
 
     else:
         raise ValueError(f"Unsupported kind: {kind}")
 
-    # write back
+    # write back mutated containers
     snap["accounts"] = accounts
     snap["debts"]    = debts
     return snap, entry

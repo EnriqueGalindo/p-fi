@@ -9,37 +9,44 @@
 
 <div class="card">
   <h1>Add ledger entry</h1>
-  <form method="post" action="/ledger/new" id="txForm">
+
+  <form method="post" action="{{ url_for('ledger.create_entry') }}" id="txForm">
+
+    <!-- Common fields -->
     <div class="group">
       <div class="row">
         <label>Type</label>
-        <select name="kind" id="kind">
+        <select id="kind" name="kind" data-base="kind">
           <option value="expense">Expense</option>
           <option value="debt_payment">Debt payment</option>
           <option value="transfer">Transfer (account → account)</option>
+          <option value="income">Income (deposit)</option>
         </select>
       </div>
+
       <div class="row">
         <label>Amount</label>
-        <input name="amount" type="number" step="0.01" placeholder="0.00" required>
+        <input type="number" step="0.01" placeholder="0.00" required name="amount" data-base="amount">
       </div>
+
       <div class="row">
         <label>Note</label>
-        <input name="note" placeholder="optional memo">
+        <input placeholder="optional memo" name="note" data-base="note">
       </div>
     </div>
 
+    <!-- Expense -->
     <div class="group" id="expenseFields">
       <div class="row">
         <label>From account</label>
-        <select name="from_account">
+        <select name="" data-base="from_account">
           <option value="">-- choose --</option>
           {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Category</label>
-        <select name="category">
+        <select name="" data-base="category">
           <option value="grocery">grocery</option>
           <option value="entertainment">entertainment</option>
           <option value="utility">utility</option>
@@ -51,48 +58,78 @@
       </div>
     </div>
 
+    <!-- Transfer -->
     <div class="group" id="transferFields" hidden>
       <div class="row">
         <label>From account</label>
-        <select name="from_account">
+        <select name="" data-base="from_account">
           <option value="">-- choose --</option>
           {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>To account</label>
-        <select name="to_account">
+        <select name="" data-base="to_account">
           <option value="">-- choose --</option>
           {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
         </select>
       </div>
     </div>
 
+    <!-- Debt payment -->
     <div class="group" id="debtFields" hidden>
       <div class="row">
         <label>Pay from account</label>
-        <select name="from_account">
+        <select name="" data-base="from_account">
           <option value="">-- choose --</option>
           {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Debt</label>
-        <select name="debt_name">
+        <select name="" data-base="debt_name">
           <option value="">-- choose debt --</option>
           {% for d in debts %}<option>{{ d.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Principal portion (optional)</label>
-        <input name="principal_portion" type="number" step="0.01" placeholder="defaults to full amount">
+        <input type="number" step="0.01" placeholder="defaults to full amount" name="" data-base="principal_portion">
       </div>
       <div class="row">
         <label>Interest portion (optional)</label>
-        <input name="interest_portion" type="number" step="0.01" placeholder="0.00">
+        <input type="number" step="0.01" placeholder="0.00" name="" data-base="interest_portion">
       </div>
       <div class="row" style="grid-column:1/-1">
         <small class="muted">If you leave principal/interest blank, we’ll apply 100% to principal (good for revolving/other).</small>
+      </div>
+    </div>
+
+    <!-- Income -->
+    <div class="group" id="incomeFields" hidden>
+      <div class="row">
+        <label>Deposit to</label>
+        <select name="" data-base="to_account" required>
+          <option value="">-- choose account --</option>
+          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="row">
+        <label>Subtype</label>
+        <select name="" data-base="income_subtype">
+          <option value="paystub">paystub</option>
+          <option value="refund">refund</option>
+          <option value="other" selected>other</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Source (optional)</label>
+        <input name="" data-base="income_source" placeholder="Employer, IRS, Venmo, etc.">
+      </div>
+      <div class="row" style="grid-column:1/-1">
+        <small class="muted">
+          Tip: If you receive cash, choose your cash account here. If it’s a refund, pick “refund”.
+        </small>
       </div>
     </div>
 
@@ -105,14 +142,41 @@
   const expenseFields  = document.getElementById('expenseFields');
   const transferFields = document.getElementById('transferFields');
   const debtFields     = document.getElementById('debtFields');
+  const incomeFields   = document.getElementById('incomeFields');
+  const form           = document.getElementById('txForm');
 
-  function toggleSections() {
+  function visibleSection(){
+    const v = kind.value;
+    if (v === 'transfer') return transferFields;
+    if (v === 'debt_payment') return debtFields;
+    if (v === 'income') return incomeFields;
+    return expenseFields;
+  }
+
+  function toggleSections(){
     const v = kind.value;
     expenseFields.hidden  = v !== 'expense';
     transferFields.hidden = v !== 'transfer';
     debtFields.hidden     = v !== 'debt_payment';
+    incomeFields.hidden   = v !== 'income';
+    syncNames();
   }
+
+  function syncNames(){
+    // Clear all names in all sections
+    document.querySelectorAll('#expenseFields [data-base], #transferFields [data-base], #debtFields [data-base], #incomeFields [data-base]')
+      .forEach(el => el.name = '');
+
+    // Apply names only to the visible section
+    visibleSection().querySelectorAll('[data-base]').forEach(el => el.name = el.dataset.base);
+
+    // Re-apply names to common fields
+    document.querySelectorAll('form#txForm > .group [data-base]')
+      .forEach(el => el.name = el.dataset.base);
+  }
+
   kind.addEventListener('change', toggleSections);
-  toggleSections();
+  form.addEventListener('submit', syncNames); // safety on submit
+  toggleSections(); // initial
 </script>
 {% endblock %}
