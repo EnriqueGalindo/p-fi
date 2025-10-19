@@ -17,6 +17,76 @@ def _find_by_name(items, name):
             return x
     return None
 
+def reverse_transaction(snapshot: dict, entry: dict):
+    """
+    Undo a single persisted ledger entry against the snapshot (latest.json).
+    Returns a *modified copy* of snapshot.
+    """
+    snap = {**snapshot}
+    accounts = list(snap.get("accounts", []) or [])
+    debts    = list(snap.get("debts", []) or [])
+
+    kind   = (entry.get("kind") or "").lower()
+    amount = float(entry.get("amount") or 0)
+
+    def find_account(name):
+        for a in accounts:
+            if (a.get("name") or "") == (name or ""):
+                return a
+        return None
+
+    def find_debt(name):
+        for d in debts:
+            if (d.get("name") or "") == (name or ""):
+                return d
+        return None
+
+    if kind == "expense":
+        # Expense originally: account -= amount
+        acc = find_account(entry.get("from_account"))
+        if acc:
+            acc["balance"] = float(acc.get("balance") or 0) + amount
+
+    elif kind == "transfer":
+        # Transfer originally: src -= amount ; dst += amount
+        src = find_account(entry.get("from_account"))
+        dst = find_account(entry.get("to_account"))
+        if src:
+            src["balance"] = float(src.get("balance") or 0) + amount
+        if dst:
+            dst["balance"] = float(dst.get("balance") or 0) - amount
+
+    elif kind == "debt_payment":
+        # Debt payment originally:
+        #   account -= amount
+        #   debt_balance -= principal (interest portion didn't change balances except cash)
+        acc  = find_account(entry.get("from_account"))
+        debt = find_debt(entry.get("debt_name"))
+        principal = float(entry.get("principal_portion") or entry.get("meta", {}).get("principal_portion") or 0.0)
+        # If principal wasn't stored in entry, best-effort: assume full amount was principal
+        if principal <= 0 or principal > amount:
+            principal = amount
+
+        if acc:
+            acc["balance"] = float(acc.get("balance") or 0) + amount
+        if debt:
+            debt["balance"] = float(debt.get("balance") or 0) + principal
+
+    elif kind == "income":
+        # Income originally: to_account += amount
+        acc = find_account(entry.get("to_account"))
+        if acc:
+            acc["balance"] = float(acc.get("balance") or 0) - amount
+
+    else:
+        # Unknown kinds are ignored (no-op)
+        pass
+
+    snap["accounts"] = accounts
+    snap["debts"]    = debts
+    return snap
+
+
 # app/logic/ledger.py
 def apply_transaction(snapshot: dict, tx: dict):
     """

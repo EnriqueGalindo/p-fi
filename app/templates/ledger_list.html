@@ -3,6 +3,7 @@
 <div class="card">
   <h1>Ledger</h1>
   <p><a href="/ledger/new">+ Add entry</a></p>
+
   <table>
     <thead>
       <tr>
@@ -12,8 +13,9 @@
         <th>From</th>
         <th>To / Debt</th>
         <th>Category</th>
-        <th>Balance</th>  <!-- NEW -->
+        <th>Balance</th>
         <th>Note</th>
+        <th style="width:48px; text-align:right;">&nbsp;</th>  <!-- Actions -->
       </tr>
     </thead>
     <tbody>
@@ -26,7 +28,7 @@
         <td>{{ t.to_account or t.debt_name or '—' }}</td>
         <td>{{ t.category or '—' }}</td>
 
-        <!-- NEW balance logic -->
+        <!-- Balance display -->
         <td>
           {% if t.balance_kind == 'account' %}
             {{ t.balance_name }}: ${{ '%.2f'|format(t.balance_after or 0) }}
@@ -41,6 +43,25 @@
         </td>
 
         <td>{{ t.note or '' }}</td>
+
+        <!-- Actions: delete -->
+        <td style="text-align:right;">
+          {% if t.id %}
+          <form method="post"
+                action="{{ url_for('ledger.delete_entry', entry_id=t.id) }}"
+                onsubmit="return confirm('Delete this entry? This will update balances.');"
+                style="display:inline;">
+            <button type="submit"
+                    title="Delete"
+                    style="border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:.3rem .5rem;cursor:pointer">
+              🗑
+            </button>
+          </form>
+          {% else %}
+            <!-- no id to delete -->
+            —
+          {% endif %}
+        </td>
       </tr>
     {% endfor %}
     </tbody>

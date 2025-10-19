@@ -1,7 +1,7 @@
 # app/blueprints/ledger.py
-from flask import Blueprint, current_app, render_template, request, redirect, url_for
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, abort
 import datetime as dt
-from ..logic.ledger import apply_transaction
+from ..logic.ledger import apply_transaction, reverse_transaction
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
 
@@ -104,5 +104,46 @@ def create_entry():
     snap_ts = entry["id"].replace(":", "-")
     store.write_json(f"{_prefix(user_id)}snapshots/{snap_ts}.json", updated)
     store.write_json(f"{_prefix(user_id)}latest.json", updated)
+
+    return redirect(url_for("ledger.list_entries"))
+
+def _entry_path(user_id: str, entry_id: str) -> str:
+    return f"{_prefix(user_id)}ledger/entries/{entry_id.replace(':','-')}.json"
+
+@bp.post("/delete/<entry_id>")
+def delete_entry(entry_id):
+    user_id = current_app.config["USER_ID"]
+    store   = current_app.gcs
+
+    idx_path = f"{_prefix(user_id)}ledger/index.json"
+    latest_path = f"{_prefix(user_id)}latest.json"
+
+    # Load index and find entry summary
+    index = store.read_json(idx_path) or []
+    match = next((e for e in index if e.get("id") == entry_id), None)
+
+    # Load the full entry payload if present
+    entry = store.read_json(_entry_path(user_id, entry_id)) or match
+    if not entry:
+        abort(404, description="Entry not found")
+
+    # Reverse the entry effect on latest.json
+    latest = store.read_json(latest_path) or {}
+    latest = reverse_transaction(latest, entry)
+
+    # Persist updated latest
+    store.write_json(latest_path, latest)
+
+    # Remove from index
+    index = [e for e in index if e.get("id") != entry_id]
+    store.write_json(idx_path, index)
+
+    # Optionally delete the entry file (only if your GCS helper supports delete)
+    try:
+        # Some implementations may not have delete(); ignore if not present.
+        if hasattr(store, "delete"):
+            store.delete(_entry_path(user_id, entry_id))
+    except Exception:
+        pass  # safe to ignore
 
     return redirect(url_for("ledger.list_entries"))
