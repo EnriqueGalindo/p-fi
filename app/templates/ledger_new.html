@@ -11,12 +11,25 @@
   <h1>Add ledger entry</h1>
 
   <form method="post" action="{{ url_for('ledger.create_entry') }}" id="txForm">
+    <!-- Canonical hidden fields the server expects -->
+    <input type="hidden" name="kind" id="canon_kind">
+    <input type="hidden" name="amount" id="canon_amount">
+    <input type="hidden" name="note" id="canon_note">
 
-    <!-- Common fields -->
+    <input type="hidden" name="from_account" id="canon_from">
+    <input type="hidden" name="to_account" id="canon_to">
+    <input type="hidden" name="category" id="canon_category">
+    <input type="hidden" name="debt_name" id="canon_debt">
+    <input type="hidden" name="principal_portion" id="canon_principal">
+    <input type="hidden" name="interest_portion" id="canon_interest">
+    <input type="hidden" name="income_subtype" id="canon_income_subtype">
+    <input type="hidden" name="income_source" id="canon_income_source">
+
+    <!-- Common fields (user-facing) -->
     <div class="group">
       <div class="row">
         <label>Type</label>
-        <select id="kind" name="kind" data-base="kind">
+        <select id="kind">
           <option value="expense">Expense</option>
           <option value="debt_payment">Debt payment</option>
           <option value="transfer">Transfer (account → account)</option>
@@ -26,12 +39,12 @@
 
       <div class="row">
         <label>Amount</label>
-        <input type="number" step="0.01" placeholder="0.00" required name="amount" data-base="amount">
+        <input id="amount" type="number" step="0.01" placeholder="0.00" required>
       </div>
 
       <div class="row">
         <label>Note</label>
-        <input placeholder="optional memo" name="note" data-base="note">
+        <input id="note" placeholder="optional memo">
       </div>
     </div>
 
@@ -39,14 +52,14 @@
     <div class="group" id="expenseFields">
       <div class="row">
         <label>From account</label>
-        <select name="" data-base="from_account">
+        <select id="expense_from">
           <option value="">-- choose --</option>
-          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+          {% for a in accounts %}<option value="{{ a.name }}">{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Category</label>
-        <select name="" data-base="category">
+        <select id="expense_category">
           <option value="grocery">grocery</option>
           <option value="entertainment">entertainment</option>
           <option value="utility">utility</option>
@@ -62,16 +75,16 @@
     <div class="group" id="transferFields" hidden>
       <div class="row">
         <label>From account</label>
-        <select name="" data-base="from_account">
+        <select id="transfer_from">
           <option value="">-- choose --</option>
-          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+          {% for a in accounts %}<option value="{{ a.name }}">{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>To account</label>
-        <select name="" data-base="to_account">
+        <select id="transfer_to">
           <option value="">-- choose --</option>
-          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+          {% for a in accounts %}<option value="{{ a.name }}">{{ a.name }}</option>{% endfor %}
         </select>
       </div>
     </div>
@@ -80,25 +93,25 @@
     <div class="group" id="debtFields" hidden>
       <div class="row">
         <label>Pay from account</label>
-        <select name="" data-base="from_account">
+        <select id="debt_from">
           <option value="">-- choose --</option>
-          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+          {% for a in accounts %}<option value="{{ a.name }}">{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Debt</label>
-        <select name="" data-base="debt_name">
+        <select id="debt_name">
           <option value="">-- choose debt --</option>
-          {% for d in debts %}<option>{{ d.name }}</option>{% endfor %}
+          {% for d in debts %}<option value="{{ d.name }}">{{ d.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Principal portion (optional)</label>
-        <input type="number" step="0.01" placeholder="defaults to full amount" name="" data-base="principal_portion">
+        <input id="debt_principal" type="number" step="0.01" placeholder="defaults to full amount">
       </div>
       <div class="row">
         <label>Interest portion (optional)</label>
-        <input type="number" step="0.01" placeholder="0.00" name="" data-base="interest_portion">
+        <input id="debt_interest" type="number" step="0.01" placeholder="0.00">
       </div>
       <div class="row" style="grid-column:1/-1">
         <small class="muted">If you leave principal/interest blank, we’ll apply 100% to principal (good for revolving/other).</small>
@@ -109,14 +122,14 @@
     <div class="group" id="incomeFields" hidden>
       <div class="row">
         <label>Deposit to</label>
-        <select name="" data-base="to_account" required>
+        <select id="income_to">
           <option value="">-- choose account --</option>
-          {% for a in accounts %}<option>{{ a.name }}</option>{% endfor %}
+          {% for a in accounts %}<option value="{{ a.name }}">{{ a.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="row">
         <label>Subtype</label>
-        <select name="" data-base="income_subtype">
+        <select id="income_subtype">
           <option value="paystub">paystub</option>
           <option value="refund">refund</option>
           <option value="other" selected>other</option>
@@ -124,12 +137,10 @@
       </div>
       <div class="row">
         <label>Source (optional)</label>
-        <input name="" data-base="income_source" placeholder="Employer, IRS, Venmo, etc.">
+        <input id="income_source" placeholder="Employer, IRS, Venmo, etc.">
       </div>
       <div class="row" style="grid-column:1/-1">
-        <small class="muted">
-          Tip: If you receive cash, choose your cash account here. If it’s a refund, pick “refund”.
-        </small>
+        <small class="muted">Tip: If you receive cash, choose your cash account here. If it’s a refund, pick “refund”.</small>
       </div>
     </div>
 
@@ -138,45 +149,112 @@
 </div>
 
 <script>
-  const kind = document.getElementById('kind');
+  const kindSel   = document.getElementById('kind');
+  const amountInp = document.getElementById('amount');
+  const noteInp   = document.getElementById('note');
+
   const expenseFields  = document.getElementById('expenseFields');
   const transferFields = document.getElementById('transferFields');
   const debtFields     = document.getElementById('debtFields');
   const incomeFields   = document.getElementById('incomeFields');
-  const form           = document.getElementById('txForm');
 
-  function visibleSection(){
-    const v = kind.value;
-    if (v === 'transfer') return transferFields;
-    if (v === 'debt_payment') return debtFields;
-    if (v === 'income') return incomeFields;
-    return expenseFields;
+  // Expense controls
+  const expenseFrom = document.getElementById('expense_from');
+  const expenseCat  = document.getElementById('expense_category');
+
+  // Transfer controls
+  const transferFrom = document.getElementById('transfer_from');
+  const transferTo   = document.getElementById('transfer_to');
+
+  // Debt controls
+  const debtFrom   = document.getElementById('debt_from');
+  const debtName   = document.getElementById('debt_name');
+  const debtPrin   = document.getElementById('debt_principal');
+  const debtInt    = document.getElementById('debt_interest');
+
+  // Income controls
+  const incomeTo       = document.getElementById('income_to');
+  const incomeSubtype  = document.getElementById('income_subtype');
+  const incomeSource   = document.getElementById('income_source');
+
+  // Canonical hidden inputs
+  const canon = {
+    kind:       document.getElementById('canon_kind'),
+    amount:     document.getElementById('canon_amount'),
+    note:       document.getElementById('canon_note'),
+    from:       document.getElementById('canon_from'),
+    to:         document.getElementById('canon_to'),
+    category:   document.getElementById('canon_category'),
+    debt:       document.getElementById('canon_debt'),
+    principal:  document.getElementById('canon_principal'),
+    interest:   document.getElementById('canon_interest'),
+    income_sub: document.getElementById('canon_income_subtype'),
+    income_src: document.getElementById('canon_income_source'),
+  };
+
+  function showSection() {
+    const k = kindSel.value;
+
+    expenseFields.hidden  = k !== 'expense';
+    transferFields.hidden = k !== 'transfer';
+    debtFields.hidden     = k !== 'debt_payment';
+    incomeFields.hidden   = k !== 'income';
+
+    // Toggle "required" only for visible fields to avoid blocked submit
+    expenseFrom.toggleAttribute('required',  k === 'expense');
+    expenseCat.toggleAttribute('required',   k === 'expense');
+
+    transferFrom.toggleAttribute('required', k === 'transfer');
+    transferTo.toggleAttribute('required',   k === 'transfer');
+
+    debtFrom.toggleAttribute('required',     k === 'debt_payment');
+    debtName.toggleAttribute('required',     k === 'debt_payment');
+
+    incomeTo.toggleAttribute('required',     k === 'income');
   }
 
-  function toggleSections(){
-    const v = kind.value;
-    expenseFields.hidden  = v !== 'expense';
-    transferFields.hidden = v !== 'transfer';
-    debtFields.hidden     = v !== 'debt_payment';
-    incomeFields.hidden   = v !== 'income';
-    syncNames();
+  function mapToCanon() {
+    const k = kindSel.value;
+
+    canon.kind.value   = k;
+    canon.amount.value = amountInp.value || '';
+    canon.note.value   = noteInp.value || '';
+
+    // Clear canon specifics
+    canon.from.value = '';
+    canon.to.value = '';
+    canon.category.value = '';
+    canon.debt.value = '';
+    canon.principal.value = '';
+    canon.interest.value = '';
+    canon.income_sub.value = '';
+    canon.income_src.value = '';
+
+    if (k === 'expense') {
+      canon.from.value     = expenseFrom.value || '';
+      canon.category.value = expenseCat.value || 'other';
+    } else if (k === 'transfer') {
+      canon.from.value = transferFrom.value || '';
+      canon.to.value   = transferTo.value   || '';
+    } else if (k === 'debt_payment') {
+      canon.from.value     = debtFrom.value || '';
+      canon.debt.value     = debtName.value || '';
+      canon.principal.value = debtPrin.value || '';
+      canon.interest.value  = debtInt.value  || '';
+    } else if (k === 'income') {
+      canon.to.value       = incomeTo.value || '';
+      canon.income_sub.value = incomeSubtype.value || 'other';
+      canon.income_src.value = incomeSource.value  || '';
+    }
   }
 
-  function syncNames(){
-    // Clear all names in all sections
-    document.querySelectorAll('#expenseFields [data-base], #transferFields [data-base], #debtFields [data-base], #incomeFields [data-base]')
-      .forEach(el => el.name = '');
+  kindSel.addEventListener('change', showSection);
+  showSection();
 
-    // Apply names only to the visible section
-    visibleSection().querySelectorAll('[data-base]').forEach(el => el.name = el.dataset.base);
-
-    // Re-apply names to common fields
-    document.querySelectorAll('form#txForm > .group [data-base]')
-      .forEach(el => el.name = el.dataset.base);
-  }
-
-  kind.addEventListener('change', toggleSections);
-  form.addEventListener('submit', syncNames); // safety on submit
-  toggleSections(); // initial
+  document.getElementById('txForm').addEventListener('submit', (e) => {
+    // map to canonical before real submit
+    mapToCanon();
+    // let HTML5 required do its work based on visible section
+  });
 </script>
 {% endblock %}
