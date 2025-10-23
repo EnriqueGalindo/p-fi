@@ -9,7 +9,7 @@ import hashlib
 bp = Blueprint("auth", __name__)
 
 APP_BASE_URL      = os.getenv("APP_BASE_URL", "http://localhost:8080")
-EMAIL_MODE        = os.getenv("EMAIL_MODE", "console")  # console | provider
+EMAIL_MODE        = os.getenv("EMAIL_MODE", "provider")  # console | provider
 MAGIC_TOKEN_SECRET= os.getenv("MAGIC_TOKEN_SECRET", "dev-secret")
 RESEND_API_KEY    = os.getenv("RESEND_API_KEY", "")
 
