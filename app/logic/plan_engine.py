@@ -1,7 +1,8 @@
 import datetime as dt
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, url_for
-from ..services.utils import get_json_from_gcs
+from ..services.utils import get_json_from_gcs, current_user_identity, user_prefix
+
 
 MONTH_FACTORS = {"monthly":1, "biweekly":26/12, "weekly":52/12, "annual":1/12}
 CASH_TYPES = {"cash", "checking", "savings"}
@@ -10,8 +11,9 @@ bp = Blueprint("plan", __name__, url_prefix="")
 
 @bp.get("/plan")
 def view_plan():
-    user_id = current_app.config["USER_ID"]
-    latest = current_app.gcs.read_json(f"profiles/{user_id}/latest.json")
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     if not latest:
         return redirect(url_for("onboarding.onboarding_form"))
 

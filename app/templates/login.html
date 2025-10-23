@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:460px">
+  <h1>Sign in</h1>
+  {% with msgs=get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <ul>
+        {% for cat,msg in msgs %}
+          <li class="muted">{{ msg }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+  <form method="post" action="{{ url_for('auth.login_submit') }}">
+    <label>Email</label>
+    <input name="email" type="email" placeholder="you@gmoney.me" required>
+    <button type="submit">Send sign-in link</button>
+  </form>
+</div>
+{% endblock %}

@@ -3,9 +3,17 @@ from flask import Blueprint, current_app, render_template, request, redirect, ur
 import datetime as dt
 from ..logic.ledger import apply_transaction, reverse_transaction
 from ..logic.ledger_stats import compute_ledger_stats
+from flask import session, redirect, url_for
+from ..services.utils import current_user_identity, user_prefix
+
 
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
+
+@bp.before_request
+def require_login_for_blueprint():
+    if not session.get("user_email"):
+        return redirect(url_for("auth.login_form"))
 
 def _prefix(user_id: str) -> str:
     return f"profiles/{user_id}/"
@@ -42,9 +50,10 @@ def _append_index(user_id: str, entry: dict):
 
 @bp.get("/")
 def list_entries():
-    user_id = current_app.config["USER_ID"]
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     store   = current_app.gcs
-    latest  = store.read_json(f"{_prefix(user_id)}latest.json") or {}
     index   = store.read_json(f"{_prefix(user_id)}ledger/index.json") or []
     index   = sorted(index, key=lambda x: x.get("ts",""), reverse=True)[:100]
 
@@ -58,8 +67,9 @@ def list_entries():
 
 @bp.get("/new")
 def new_entry_form():
-    user_id = current_app.config["USER_ID"]
-    latest = current_app.gcs.read_json(f"{_prefix(user_id)}latest.json") or {}
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     accounts = latest.get("accounts", []) or []
     debts    = latest.get("debts", []) or []
     today = dt.datetime.utcnow().date().isoformat()  # YYYY-MM-DD
@@ -67,9 +77,10 @@ def new_entry_form():
 
 @bp.post("/new")
 def create_entry():
-    user_id = current_app.config["USER_ID"]
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     store   = current_app.gcs
-    latest  = store.read_json(f"{_prefix(user_id)}latest.json") or {}
 
     # basic fields
     kind   = (request.form.get("kind") or "").lower()
@@ -140,11 +151,12 @@ def _entry_path(user_id: str, entry_id: str) -> str:
 
 @bp.post("/delete/<entry_id>")
 def delete_entry(entry_id):
-    user_id = current_app.config["USER_ID"]
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     store   = current_app.gcs
 
-    idx_path = f"{_prefix(user_id)}ledger/index.json"
-    latest_path = f"{_prefix(user_id)}latest.json"
+    idx_path = f"{pref}ledger/index.json"
 
     # Load index and find entry summary
     index = store.read_json(idx_path) or []

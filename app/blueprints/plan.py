@@ -1,17 +1,20 @@
 # app/blueprints/plan.py
 from flask import Blueprint, current_app, jsonify, redirect, render_template, url_for, request
 from ..logic.plan_engine import compute_plan, simulate_debt_payoff
-from ..services.utils import get_json_from_gcs
+from ..services.utils import current_user_identity, get_json_from_gcs, user_prefix
 from math import ceil, log
 from ..logic.plan_engine import MONTH_FACTORS  # reuse factors
 from ..logic.weekly_budget import build_weekly_budget
-
-
+from flask import session, redirect, url_for
 
 STEPS_CFG_PATH = "config/plan_steps.json"
+CASH_TYPES = {"cash","checking","savings"}
 bp = Blueprint("plan", __name__, url_prefix="")
 
-CASH_TYPES = {"cash","checking","savings"}
+@bp.before_request
+def require_login_for_blueprint():
+    if not session.get("user_email"):
+        return redirect(url_for("auth.login_form"))
 
 def _to_monthly(amount, interval):
     if amount is None:
@@ -40,8 +43,9 @@ def _months_to_payoff(balance: float, apr_percent: float, min_payment: float) ->
 
 @bp.get("/overview")
 def overview():
-    user_id = current_app.config["USER_ID"]
-    latest = current_app.gcs.read_json(f"profiles/{user_id}/latest.json")
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     if not latest:
         return redirect(url_for("onboarding.onboarding_form"))
 
@@ -137,8 +141,9 @@ def overview():
 
 @bp.get("/plan")
 def view_plan():
-    user_id = current_app.config["USER_ID"]
-    latest = current_app.gcs.read_json(f"profiles/{user_id}/latest.json")
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     if not latest:
         return redirect(url_for("onboarding.onboarding_form"))
 

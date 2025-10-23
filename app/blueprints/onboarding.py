@@ -1,8 +1,15 @@
 # app/blueprints/onboarding.py
 import datetime as dt
 from flask import Blueprint, current_app, render_template, request, redirect, url_for
+from flask import session, redirect, url_for
+from ..services.utils import current_user_identity, user_prefix
 
 bp = Blueprint("onboarding", __name__)
+
+@bp.before_request
+def require_login_for_blueprint():
+    if not session.get("user_email"):
+        return redirect(url_for("auth.login_form"))
 
 def _profile_prefix(user_id: str) -> str:
     return f"profiles/{user_id}/"
@@ -17,8 +24,9 @@ def root():
 
 @bp.get("/onboarding")
 def onboarding_form():
-    user_id = current_app.config["USER_ID"]
-    latest = current_app.gcs.read_json(f"profiles/{user_id}/latest.json") or {}
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     return render_template("onboarding.html", profile=latest)
 
 @bp.post("/onboarding")
@@ -46,7 +54,7 @@ def onboarding_submit():
                 items.append(row)
         return items
 
-    user_id = current_app.config["USER_ID"]
+    _, user_id = current_user_identity()
     currency = (request.form.get("currency") or "USD").upper()
     notes = request.form.get("notes", "").strip()
     household_size = int(request.form.get("household_size") or 1)
