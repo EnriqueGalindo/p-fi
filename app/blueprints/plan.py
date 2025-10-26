@@ -11,10 +11,10 @@ STEPS_CFG_PATH = "config/plan_steps.json"
 CASH_TYPES = {"cash","checking","savings"}
 bp = Blueprint("plan", __name__, url_prefix="")
 
-@bp.before_request
-def require_login_for_blueprint():
-    if not session.get("user_email"):
-        return redirect(url_for("auth.login_form"))
+# @bp.before_request
+# def require_login_for_blueprint():
+#     if not session.get("user_email"):
+#         return redirect(url_for("auth.login_form"))
 
 def _to_monthly(amount, interval):
     if amount is None:

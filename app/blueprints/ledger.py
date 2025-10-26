@@ -10,10 +10,10 @@ from ..services.utils import current_user_identity, user_prefix
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
 
-@bp.before_request
-def require_login_for_blueprint():
-    if not session.get("user_email"):
-        return redirect(url_for("auth.login_form"))
+# @bp.before_request
+# def require_login_for_blueprint():
+#     if not session.get("user_email"):
+#         return redirect(url_for("auth.login_form"))
 
 def _prefix(user_id: str) -> str:
     return f"profiles/{user_id}/"

@@ -1,6 +1,10 @@
 import os
-from flask import Flask
+import time
+from flask import Flask, session
 from .services.gcs import GcsStore
+from .services.utils import user_id_for_email, canonicalize_email
+
+
 
 def create_app():
     app = Flask(__name__)
@@ -22,6 +26,22 @@ def create_app():
     app.config["GCS_BUCKET"] = os.environ["GCS_BUCKET"]
     app.config["USER_ID"]    = os.environ.get("USER_ID", "default")
 
+    app.config["AUTH_DISABLED"] = os.getenv("AUTH_DISABLED", "").lower() in ("1", "true", "yes")
+    app.config["DEV_EMAIL"] = os.getenv("DEV_EMAIL", "dev@gmoney.me")
+
+    if app.config["AUTH_DISABLED"]:
+        @app.before_request
+        def _inject_dev_session():
+            # create a fake, consistent user once per browser session
+            if "user_id" not in session:
+                email = canonicalize_email(app.config["DEV_EMAIL"])
+                uid = user_id_for_email(email)
+                session.update({
+                    "user_email": email,
+                    "user_id": uid,
+                    "auth_at": int(time.time()),
+                })
+
     # shared store
     app.gcs = GcsStore(app.config["GCS_BUCKET"])
 
@@ -30,7 +50,9 @@ def create_app():
     from .blueprints.plan        import bp as plan_bp
     from .blueprints.ledger      import bp as ledger_bp
     from .blueprints.auth        import bp as auth_bp
-
+    from .blueprints.mail import bp as mail_bp
+    
+    app.register_blueprint(mail_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(ledger_bp)
     app.register_blueprint(onboarding_bp)

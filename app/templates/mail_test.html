@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1>Send a test email</h1>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% if msgs %}
+      <ul>
+        {% for cat, m in msgs %}
+          <li class="{{ cat }}">{{ m }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  <form method="post" action="{{ url_for('mail.test_send') }}">
+    <div style="display:grid;grid-template-columns:140px 1fr;gap:.5rem;max-width:720px">
+      <label for="to">To</label>
+      <input id="to" name="to" placeholder="you@example.com" required>
+
+      <label for="subject">Subject</label>
+      <input id="subject" name="subject" value="Hello from gmoney.me">
+
+      <label for="body">Body</label>
+      <textarea id="body" name="body" rows="6">This is a test email.</textarea>
+    </div>
+
+    <div style="margin-top:1rem">
+      <button type="submit">Send email</button>
+    </div>
+  </form>
+
+  <p class="muted" style="margin-top:.75rem">
+    In development, set <code>EMAIL_MODE=console</code> to just print the email to the logs.<br>
+    In production, set <code>EMAIL_MODE=provider</code>, <code>RESEND_API_KEY</code>, and <code>MAIL_FROM</code>.
+  </p>
+</div>
+{% endblock %}

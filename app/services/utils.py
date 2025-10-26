@@ -1,4 +1,5 @@
 # app/services/utils.py
+import html
 import json
 import time
 import logging
@@ -7,6 +8,8 @@ from google.cloud import storage
 from google.api_core.exceptions import NotFound, Forbidden
 from functools import wraps
 from flask import session, redirect, url_for
+import os
+import requests
 
 # very small in-process TTL cache
 _cache: dict[Tuple[str, str], tuple[float, Any]] = {}
@@ -105,3 +108,64 @@ def login_required(fn):
             return redirect(url_for("auth.login_form"))
         return fn(*args, **kwargs)
     return wrapper
+
+def send_email(to, subject
+               , text=None, html=None
+               , *
+               , from_addr=None, reply_to=None
+               , tags=None):
+    mode = os.getenv("EMAIL_MODE", "provider").lower()
+    api_key = os.getenv("RESEND_API_KEY", "")
+    from_addr = from_addr or os.getenv("MAIL_FROM", "gmoney.me <login@gmoney.me>")
+
+    if isinstance(to, str):
+        to = [to]
+
+    if not (text or html):
+        text = "(no body)"
+
+    print(mode)
+    if mode != "provider":
+        # Dev: just print
+        print("\n[EMAIL:console]")
+        print("From:", from_addr)
+        print("To  :", ", ".join(to))
+        print("Subj:", subject)
+        print("Text:", text or "")
+        if html:
+            print("HTML:", html[:400] + ("..." if len(html) > 400 else ""))
+        print("[/EMAIL]\n")
+        return True, None
+
+    if not api_key:
+        return False, "RESEND_API_KEY missing and EMAIL_MODE=provider"
+
+    payload = {
+        "from": from_addr,
+        "to": to,
+        "subject": subject,
+    }
+    if text:
+        payload["text"] = text
+    if html:
+        payload["html"] = html
+    if reply_to:
+        payload["reply_to"] = reply_to
+    if tags:
+        payload["tags"] = [{"name": t} for t in tags]
+
+    try:
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=10,
+        )
+        if r.status_code >= 400:
+            return False, f"Resend error {r.status_code}: {r.text}"
+        return True, None
+    except requests.RequestException as e:
+        return False, str(e)
