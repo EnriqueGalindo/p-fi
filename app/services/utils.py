@@ -1,5 +1,6 @@
 # app/services/utils.py
 import html
+import resend
 import json
 import time
 import logging
@@ -114,58 +115,78 @@ def send_email(to, subject
                , *
                , from_addr=None, reply_to=None
                , tags=None):
-    mode = os.getenv("EMAIL_MODE", "provider").lower()
+    mode = (os.getenv("EMAIL_MODE", "provider") or "provider").lower()
     api_key = os.getenv("RESEND_API_KEY", "")
     from_addr = from_addr or os.getenv("MAIL_FROM", "gmoney.me <login@gmoney.me>")
 
+    # Normalize recipients
     if isinstance(to, str):
-        to = [to]
+        to_list = [to]
+    else:
+        to_list = [x for x in (to or []) if x]
 
+    if not to_list:
+        return False, "Missing recipient"
+
+    # Fallback body if neither provided
     if not (text or html):
         text = "(no body)"
 
-    print(mode)
+    # Console/dev mode: just print and succeed
     if mode != "provider":
-        # Dev: just print
         print("\n[EMAIL:console]")
         print("From:", from_addr)
-        print("To  :", ", ".join(to))
+        print("To  :", ", ".join(to_list))
         print("Subj:", subject)
-        print("Text:", text or "")
+        if text:
+            print("Text:", text)
         if html:
-            print("HTML:", html[:400] + ("..." if len(html) > 400 else ""))
+            preview = html if len(html) <= 400 else (html[:400] + "…")
+            print("HTML:", preview)
+        if reply_to:
+            print("Reply-To:", reply_to)
+        if tags:
+            print("Tags:", list(tags))
         print("[/EMAIL]\n")
         return True, None
 
     if not api_key:
-        return False, "RESEND_API_KEY missing and EMAIL_MODE=provider"
-
-    payload = {
-        "from": from_addr,
-        "to": to,
-        "subject": subject,
-    }
-    if text:
-        payload["text"] = text
-    if html:
-        payload["html"] = html
-    if reply_to:
-        payload["reply_to"] = reply_to
-    if tags:
-        payload["tags"] = [{"name": t} for t in tags]
+        return False, "RESEND_API_KEY not configured"
 
     try:
-        r = requests.post(
-            "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=10,
-        )
-        if r.status_code >= 400:
-            return False, f"Resend error {r.status_code}: {r.text}"
+        resend.api_key = api_key
+
+        # Resend supports: from, to, subject, html, text, reply_to, tags
+        payload: dict = {
+            "from": from_addr,
+            "to": to_list,
+            "subject": subject,
+        }
+        if text:
+            payload["text"] = text
+        if html:
+            payload["html"] = html
+        if reply_to:
+            # Resend accepts str or list[str]
+            payload["reply_to"] = reply_to
+        if tags:
+            # Accept either simple strings or full dicts.
+            # If strings, convert to {"name": tag}. Add "value" if you prefer.
+            normalized = []
+            for t in tags:
+                if isinstance(t, str):
+                    normalized.append({"name": t})
+                elif isinstance(t, dict):
+                    normalized.append(t)
+            if normalized:
+                payload["tags"] = normalized
+
+        result = resend.Emails.send(payload)  # raises on hard errors
+        # Result shape typically has an "id" on success
+        if not isinstance(result, dict) or not result.get("id"):
+            return False, "Resend: no message ID returned"
         return True, None
-    except requests.RequestException as e:
-        return False, str(e)
+
+    except Exception as e:
+        # Keep this broad; Resend SDK can raise ResendError or generic exceptions
+        return False, f"Resend error: {e}"

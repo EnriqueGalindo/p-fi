@@ -19,26 +19,20 @@ from flask import (
     flash,
 )
 
-from ..services.utils import canonicalize_email, user_id_for_email
+from ..services.utils import canonicalize_email, user_id_for_email, send_email
 
 bp = Blueprint("auth", __name__)
 
 # --- Config ---
 APP_BASE_URL       = os.getenv("APP_BASE_URL", "http://localhost:8080")
-EMAIL_MODE         = os.getenv("EMAIL_MODE", "console")     # console | provider
 MAGIC_TOKEN_SECRET = os.getenv("MAGIC_TOKEN_SECRET", "dev-secret")
-RESEND_API_KEY     = os.getenv("RESEND_API_KEY", "")
 MAIL_FROM          = os.getenv("MAIL_FROM", "gmoney.me <login@gmoney.me>")
 
 # =============================================================================
-# Storage helpers (NO session required here)
+# Storage helpers (GLOBAL pending tokens; no session dependency)
 # =============================================================================
 
 def _pending_path(tid: str) -> str:
-    """
-    Global location for pending magic-link tokens.
-    We cannot depend on session/user_id before the user is authenticated.
-    """
     return f"auth/pending/{tid}.json"
 
 def _put_json(path: str, obj: dict):
@@ -55,13 +49,11 @@ def _sign(payload: str) -> str:
     return hmac.new(MAGIC_TOKEN_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
 def create_magic_token(email: str, ttl_secs: int = 900) -> str:
-    tid = secrets.token_urlsafe(16)                  # token id (non-secret)
+    tid = secrets.token_urlsafe(16)
     exp = int(time.time()) + int(ttl_secs)
     payload = json.dumps({"tid": tid, "email": email, "exp": exp}, separators=(",", ":"))
     sig = _sign(payload)
-    token = f"{payload}.{sig}"                       # opaque token sent to the user
-
-    # Store server-side record for single-use + auditing (GLOBAL, not per-user)
+    token = f"{payload}.{sig}"
     _put_json(_pending_path(tid), {"email": email, "exp": exp, "used": False})
     return token
 
@@ -96,32 +88,28 @@ def mark_used(tid: str):
     _put_json(rec_path, rec)
 
 # =============================================================================
-# Email sender
+# Email sender (via services.utils.send_email)
 # =============================================================================
 
 def send_login_link(to_email: str, token: str) -> bool:
     link = f"{APP_BASE_URL}/auth/magic?{urlencode({'token': token})}"
     subject = "Your gmoney.me sign-in link"
     text = f"Click to sign in (valid 15 minutes): {link}"
+    html = f"""\
+<p>Click to sign in (valid 15 minutes):</p>
+<p><a href="{link}">{link}</a></p>
+"""
 
-    if EMAIL_MODE == "console":
-        print(f"[DEV] Login for {to_email}: {link}")
-        return True
-
-    # Provider mode (Resend)
-    import requests
-    r = requests.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-        json={
-            "from": MAIL_FROM,
-            "to": [to_email],
-            "subject": subject,
-            "text": text,
-        },
-        timeout=10,
+    ok, err = send_email(
+        to_email,
+        subject,
+        text=text,
+        html=html,
+        from_addr=MAIL_FROM,              # default can also come from env in send_email
+        tags=["magic-link", "login"],
     )
-    r.raise_for_status()
+    if not ok:
+        raise RuntimeError(err or "Failed to send email")
     return True
 
 # =============================================================================
@@ -143,7 +131,6 @@ def login_submit():
     try:
         send_login_link(email, token)
     except Exception as e:
-        # If provider is down or misconfigured, don't crash the app
         current_app.logger.exception("Failed to send login email")
         flash(f"Could not send email: {e}", "error")
         return redirect(url_for("auth.login_form"))
