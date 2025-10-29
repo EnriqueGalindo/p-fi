@@ -130,14 +130,33 @@ def apply_transaction(snapshot: dict, tx: dict):
 
     # ------------- kinds -------------
     if kind == "expense":
-        acc = find_account(tx.get("from_account"))
-        if not acc:
-            raise ValueError("Account not found for expense")
-        bal_before = float(acc.get("balance") or 0)
-        acc["balance"] = bal_before - amount
-        entry["balance_kind"]  = "account"
-        entry["balance_name"]  = acc.get("name")
-        entry["balance_after"] = round(float(acc["balance"]), 2)
+        # If a non-mortgage debt is selected, treat the expense as a CHARGE to that debt
+        target_debt_name = (tx.get("debt_name") or "").strip()
+        target_debt = find_debt(target_debt_name) if target_debt_name else None
+
+        if target_debt and (target_debt.get("type") or "").lower() != "mortgage":
+            debt_before = float(target_debt.get("balance") or 0.0)
+            target_debt["balance"] = debt_before + amount  # <-- increase debt
+
+            # For display
+            entry["balance_kind"]  = "debt"
+            entry["balance_name"]  = target_debt.get("name")
+            entry["balance_after"] = round(float(target_debt["balance"]), 2)
+
+            # IMPORTANT: do NOT require or modify an account balance here
+            # Ensure from_account is ignored for this path
+            entry["from_account"] = None
+
+        else:
+            # Regular expense: reduce the selected account
+            acc = find_account(tx.get("from_account"))
+            if not acc:
+                raise ValueError("Account not found for expense")
+            bal_before = float(acc.get("balance") or 0)
+            acc["balance"] = bal_before - amount
+            entry["balance_kind"]  = "account"
+            entry["balance_name"]  = acc.get("name")
+            entry["balance_after"] = round(float(acc["balance"]), 2)
 
     elif kind == "transfer":
         src = find_account(tx.get("from_account"))

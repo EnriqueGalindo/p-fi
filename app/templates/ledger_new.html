@@ -63,6 +63,15 @@
           <option value="">-- choose --</option>
           {% for a in accounts %}<option value="{{ a.name }}">{{ a.name }}</option>{% endfor %}
         </select>
+        <label>Charge to debt (optional)</label>
+        <select id="expense_debt_name">
+          <option value="">— none —</option>
+          {% for d in debts %}
+            {% if (d.type or '').lower() != 'mortgage' %}
+              <option value="{{ d.name }}">{{ d.name }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
       </div>
       <div class="row">
         <label>Category</label>
@@ -73,6 +82,7 @@
           <option value="pet">pet</option>
           <option value="clothes">clothes</option>
           <option value="health_fitness">health/fitness</option>
+          <option value="emergency">emergency</option>
           <option value="other" selected>other</option>
         </select>
       </div>
@@ -169,6 +179,7 @@
   // Expense controls
   const expenseFrom = document.getElementById('expense_from');
   const expenseCat  = document.getElementById('expense_category');
+  const expenseDebt = document.getElementById('expense_debt_name');
 
   // Transfer controls
   const transferFrom = document.getElementById('transfer_from');
@@ -200,6 +211,14 @@
     income_sub: document.getElementById('canon_income_subtype'),
     income_src: document.getElementById('canon_income_source'),
   };
+
+  function updateExpenseRequired() {
+    const debtChosen = expenseDebt && expenseDebt.value;
+    // if charging a debt, from-account is NOT required
+    expenseFrom.toggleAttribute('required', !debtChosen);
+  }
+  expenseDebt?.addEventListener('change', updateExpenseRequired);
+
 
   function showSection() {
     const k = kindSel.value;
@@ -243,6 +262,7 @@
     if (k === 'expense') {
       canon.from.value     = expenseFrom.value || '';
       canon.category.value = expenseCat.value || 'other';
+      canon.debt.value     = expenseDebt.value || ''; 
     } else if (k === 'transfer') {
       canon.from.value = transferFrom.value || '';
       canon.to.value   = transferTo.value   || '';
