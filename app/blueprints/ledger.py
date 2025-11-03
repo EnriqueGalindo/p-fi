@@ -225,14 +225,26 @@ def list_entries():
 
     # new date-range window + budget comparison
     start_dt, end_dt = _window_from_query()
+
+    if start_dt and end_dt:
+        stats = compute_ledger_stats(
+            store,
+            user_id,
+            period=period,  # harmless to pass; custom window takes precedence
+            start_iso=start_dt.isoformat(),
+            end_iso=end_dt.isoformat(),
+        )
+    else:
+        stats = compute_ledger_stats(store, user_id, period=period)
+
     budget = _budget_compare(store, user_id, index=_entries(store, user_id), start_dt=start_dt, end_dt=end_dt)
 
     return render_template(
         "ledger_list.html",
         profile=latest,
         ledger=index,
-        stats=stats,          # existing data your template already uses
-        budget=budget,        # NEW block for Actual vs Expected UI
+        stats=stats,
+        budget=budget,
         start=budget["start_iso"],
         end=budget["end_iso"],
     )
