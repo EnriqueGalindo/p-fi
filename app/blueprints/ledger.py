@@ -150,41 +150,40 @@ def _entry_path(user_id: str, entry_id: str) -> str:
     return f"{_prefix(user_id)}ledger/entries/{entry_id.replace(':','-')}.json"
 
 @bp.post("/delete/<entry_id>")
-def delete_entry(entry_id):
+def delete_entry(entry_id: str):
+    # who/where
     _, user_id = current_user_identity()
-    pref = user_prefix(user_id)
-    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
-    store   = current_app.gcs
+    pref  = user_prefix(user_id)
+    store = current_app.gcs
 
-    idx_path = f"{pref}ledger/index.json"
+    # paths
+    latest_path = f"{pref}latest.json"                  # <-- missing before
+    idx_path    = f"{pref}ledger/index.json"
+    entry_path  = _entry_path(user_id, entry_id)        # your existing helper
 
-    # Load index and find entry summary
+    # load index and find summary (optional but nice for fallback)
     index = store.read_json(idx_path) or []
     match = next((e for e in index if e.get("id") == entry_id), None)
 
-    # Load the full entry payload if present
-    entry = store.read_json(_entry_path(user_id, entry_id)) or match
+    # load full entry payload
+    entry = store.read_json(entry_path) or match
     if not entry:
         abort(404, description="Entry not found")
 
-    # Reverse the entry effect on latest.json
+    # reverse the entry's effect on latest.json
     latest = store.read_json(latest_path) or {}
     latest = reverse_transaction(latest, entry)
-
-    # Persist updated latest
     store.write_json(latest_path, latest)
 
-    # Remove from index
-    index = [e for e in index if e.get("id") != entry_id]
-    store.write_json(idx_path, index)
+    # remove from index
+    new_index = [e for e in index if e.get("id") != entry_id]
+    store.write_json(idx_path, new_index)
 
-    # Optionally delete the entry file (only if your GCS helper supports delete)
-    try:
-        # Some implementations may not have delete(); ignore if not present.
-        if hasattr(store, "delete"):
-            store.delete(_entry_path(user_id, entry_id))
-    except Exception:
-        pass  # safe to ignore
+    # (optional) archive the deleted entry for audit/recovery
+    store.write_json(f"{pref}ledger/deleted/{entry_id}.json", entry)
+
+    # (optional) delete the original entry file
+    # store.delete(entry_path)
 
     return redirect(url_for("ledger.list_entries"))
 
