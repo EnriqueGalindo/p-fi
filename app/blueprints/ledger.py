@@ -196,26 +196,26 @@ def _snap_path(user_id: str, snap_id: str) -> str:
 @bp.get("/history")
 def history():
     """List recent revert points (taken from the ledger index)."""
-    _, user_id = current_user_identity() 
+    _, user_id = current_user_identity()  # ignore email, keep user_id
     pref = user_prefix(user_id)
 
-    # We use the ledger index as our list of restore points (1 per entry).
-    index = current_app.gcs.read_json(f"{_prefix(pref)}ledger/index.json") or []
-    # newest first, show more if you like
+    # read that user's ledger index
+    index = current_app.gcs.read_json(f"{pref}ledger/index.json") or []
+
+    # newest first; limit if you want
     index = sorted(index, key=lambda x: x.get("ts", ""), reverse=True)[:200]
 
-    # Each entry’s snapshot id used when it was created:
-    # snap_id = entry["id"].replace(":", "-")
     rows = []
     for t in index:
         entry_id = (t.get("id") or "").replace(":", "-")
         rows.append({
             "snap_id": entry_id,
-            "ts": t.get("ts"),
-            "kind": t.get("kind"),
-            "amount": t.get("amount"),
-            "note": t.get("note") or "",
+            "ts":      t.get("ts"),
+            "kind":    t.get("kind"),
+            "amount":  t.get("amount"),
+            "note":    t.get("note") or "",
         })
+
     return render_template("ledger_history.html", rows=rows)
 
 @bp.post("/revert")
