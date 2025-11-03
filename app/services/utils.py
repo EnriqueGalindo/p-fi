@@ -11,6 +11,7 @@ from functools import wraps
 from flask import session, redirect, url_for
 import os
 import requests
+import datetime as dt
 
 # very small in-process TTL cache
 _cache: dict[Tuple[str, str], tuple[float, Any]] = {}
@@ -190,3 +191,97 @@ def send_email(to, subject
     except Exception as e:
         # Keep this broad; Resend SDK can raise ResendError or generic exceptions
         return False, f"Resend error: {e}"
+    
+# ---------- Time helpers ----------
+def now_iso() -> str:
+    return dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+def parse_iso(s: str) -> Optional[dt.datetime]:
+    """Accept YYYY-MM-DD or full ISO; return naive UTC datetime or None."""
+    if not s:
+        return None
+    s = s.strip()
+    try:
+        if "T" in s:
+            if s.endswith("Z"):
+                s = s[:-1]
+            return dt.datetime.fromisoformat(s).replace(microsecond=0)
+        return dt.datetime.fromisoformat(s + "T00:00:00").replace(microsecond=0)
+    except Exception:
+        return None
+
+def parse_ymd(s: str) -> dt.datetime:
+    """Strict YYYY-MM-DD (or ISO) → naive UTC datetime; raises on failure."""
+    s = (s or "").strip()
+    if not s:
+        raise ValueError("empty")
+    if "T" in s:
+        if s.endswith("Z"):
+            s = s[:-1]
+        return dt.datetime.fromisoformat(s).replace(microsecond=0)
+    return dt.datetime.fromisoformat(s + "T00:00:00").replace(microsecond=0)
+
+# ---------- Window helpers ----------
+def month_window(today_utc: Optional[dt.datetime] = None) -> Tuple[dt.datetime, dt.datetime]:
+    """First of current month → first of next month."""
+    if today_utc is None:
+        today_utc = dt.datetime.utcnow().replace(microsecond=0)
+    start = today_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+    return start, end
+
+def week_window(today_utc: Optional[dt.datetime] = None) -> Tuple[dt.datetime, dt.datetime]:
+    """ISO week (Mon 00:00 → next Mon 00:00)."""
+    if today_utc is None:
+        today_utc = dt.datetime.utcnow().replace(microsecond=0)
+    start = today_utc - dt.timedelta(days=today_utc.weekday())
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + dt.timedelta(days=7)
+    return start, end
+
+def year_window(today_utc: Optional[dt.datetime] = None) -> Tuple[dt.datetime, dt.datetime]:
+    if today_utc is None:
+        today_utc = dt.datetime.utcnow().replace(microsecond=0)
+    start = today_utc.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = start.replace(year=start.year + 1)
+    return start, end
+
+def period_bounds(now_utc: Optional[dt.datetime], period: str) -> Tuple[dt.datetime, dt.datetime]:
+    """General fallback: week|month|year|all → [start, end)."""
+    if now_utc is None:
+        now_utc = dt.datetime.utcnow().replace(microsecond=0)
+    p = (period or "month").lower()
+    if p == "week":
+        return week_window(now_utc)
+    if p == "month":
+        return month_window(now_utc)
+    if p == "year":
+        return year_window(now_utc)
+    # all-time
+    start = dt.datetime.min.replace(tzinfo=None)
+    end   = dt.datetime.max.replace(tzinfo=None)
+    return start, end
+
+def window_from_strings(q_start: str, q_end: str
+                        , fallback_today: Optional[dt.datetime] = None
+                        ) -> Tuple[dt.datetime, dt.datetime]:
+    """
+    Convert ?start=YYYY-MM-DD&end=YYYY-MM-DD (or ISO) to [start, end).
+    If invalid/missing, default to the current month.
+    """
+    if fallback_today is None:
+        fallback_today = dt.datetime.utcnow().replace(microsecond=0)
+
+    if q_start and q_end:
+        try:
+            start_dt = parse_ymd(q_start)
+            end_dt   = parse_ymd(q_end)
+            if end_dt <= start_dt:
+                end_dt = start_dt + dt.timedelta(days=1)
+            return start_dt, end_dt
+        except Exception:
+            pass
+    return month_window(fallback_today)

@@ -7,6 +7,12 @@ from typing import Dict, Tuple
 from ..logic.ledger import apply_transaction, reverse_transaction
 from ..logic.ledger_stats import compute_ledger_stats
 from ..services.utils import current_user_identity, user_prefix
+from ..services.utils import (
+    user_prefix,
+    current_user_identity,
+    now_iso,
+    window_from_strings,   
+)
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
 
@@ -14,16 +20,9 @@ bp = Blueprint("ledger", __name__, url_prefix="/ledger")
 # ----------------------------
 # Helpers
 # ----------------------------
-
-def _prefix(user_id: str) -> str:
-    return f"profiles/{user_id}/"
-
-def _now_iso() -> str:
-    return dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-
 def _append_index(user_id: str, entry: dict):
     store = current_app.gcs
-    idx_path = f"{_prefix(user_id)}ledger/index.json"
+    idx_path = f"{user_prefix(user_id)}ledger/index.json"
     idx = store.read_json(idx_path) or []
     idx.append({
         "id": entry.get("id"),
@@ -111,7 +110,7 @@ def _within(ts_iso: str, start_dt: dt.datetime, end_dt: dt.datetime) -> bool:
 
 
 def _entries(store, user_id) -> list:
-    idx = store.read_json(f"{_prefix(user_id)}ledger/index.json") or []
+    idx = store.read_json(f"{user_prefix(user_id)}ledger/index.json") or []
     return idx
 
 
@@ -266,7 +265,7 @@ def create_entry():
     ts_date = (request.form.get("ts_date") or "").strip()
 
     # Build a timestamp for sorting/reporting
-    ts_now = _now_iso()
+    ts_now = now_iso()
     ts = ts_now
     if ts_date:
         if "T" in ts_date:
@@ -308,19 +307,19 @@ def create_entry():
     # apply + persist
     updated, entry = apply_transaction(latest, tx)
 
-    entry_path = f"{_prefix(user_id)}ledger/entries/{entry['id'].replace(':','-')}.json"
+    entry_path = f"{user_prefix(user_id)}ledger/entries/{entry['id'].replace(':','-')}.json"
     store.write_json(entry_path, entry)
     _append_index(user_id, entry)
 
     snap_ts = entry["id"].replace(":", "-")
-    store.write_json(f"{_prefix(user_id)}snapshots/{snap_ts}.json", updated)
-    store.write_json(f"{_prefix(user_id)}latest.json", updated)
+    store.write_json(f"{user_prefix(user_id)}snapshots/{snap_ts}.json", updated)
+    store.write_json(f"{user_prefix(user_id)}latest.json", updated)
 
     return redirect(url_for("ledger.list_entries"))
 
 
 def _entry_path(user_id: str, entry_id: str) -> str:
-    return f"{_prefix(user_id)}ledger/entries/{entry_id.replace(':','-')}.json"
+    return f"{user_prefix(user_id)}ledger/entries/{entry_id.replace(':','-')}.json"
 
 
 @bp.post("/delete/<entry_id>")
@@ -360,12 +359,6 @@ def delete_entry(entry_id: str):
 
 
 # --- History / Revert ---
-
-def _snap_path(user_id: str, snap_id: str) -> str:
-    # snap_id is like "2025-10-19T05-36-51Z" (entry["id"] with ":" -> "-")
-    return f"{_prefix(user_id)}snapshots/{snap_id}.json"
-
-
 @bp.get("/history")
 def history():
     """List recent revert points (taken from the ledger index)."""
