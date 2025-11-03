@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from collections import defaultdict
 from typing import Dict, Any, List
+from ..services.utils import user_prefix
 
 # Helper: parse ISO with trailing 'Z'
 def _parse_iso(ts: str) -> dt.datetime:
@@ -51,7 +52,8 @@ def compute_ledger_stats(store, user_id: str, period: str = "month") -> Dict[str
             {name, total_paid, first_ts, last_ts, balance_before, balance_after}
         ]
     """
-    idx_path = f"profiles/{user_id}/ledger/index.json"
+    pref = user_prefix(user_id)
+    idx_path = f"{pref}ledger/index.json"
     index: List[dict] = store.read_json(idx_path) or []
 
     now_utc = dt.datetime.utcnow().replace(microsecond=0)
