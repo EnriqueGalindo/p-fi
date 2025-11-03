@@ -206,176 +206,34 @@ def _budget_compare(store, user_id, index: list, start_dt: dt.datetime, end_dt: 
 # ----------------------------
 
 @bp.get("/")
-@bp.get("/")
 def list_entries():
-    # --- identity & data
+    # identity + data
     _, user_id = current_user_identity()
-    pref   = user_prefix(user_id)
-    store  = current_app.gcs
+    pref = user_prefix(user_id)
+    store = current_app.gcs
     latest = store.read_json(f"{pref}latest.json") or {}
 
-    # --- list view table (keep showing latest ~100 rows, newest first)
-    index = store.read_json(f"{pref}ledger/index.json") or []
+    # list view table
+    index = _entries(store, user_id)
     index = sorted(index, key=lambda x: x.get("ts", ""), reverse=True)[:100]
 
-    # --- legacy "period" support for your existing stats cards
+    # legacy "period" still supported for your existing stats renderer
     period = (request.args.get("period") or "").lower().strip()
     if period not in {"week", "month", "year", "all"}:
-        # default so your existing UI keeps working
+        # ignore if you pass start/end; we won't use it for budget
         period = "month"
     stats = compute_ledger_stats(store, user_id, period)
 
-    # --- date window from query (start/end). Defaults to current month.
-    def _norm_iso(s: str, default_time: str) -> str | None:
-        s = (s or "").strip()
-        if not s:
-            return None
-        if "T" in s:
-            return s if s.endswith("Z") else s + "Z"
-        return f"{s}T{default_time}Z"
-
-    q_start = request.args.get("start")
-    q_end   = request.args.get("end")
-
-    if not q_start and not q_end:
-        today = dt.date.today()
-        start_dt = dt.datetime(today.year, today.month, 1)
-        # first day of next month
-        if today.month == 12:
-            end_dt = dt.datetime(today.year + 1, 1, 1)
-        else:
-            end_dt = dt.datetime(today.year, today.month + 1, 1)
-    else:
-        start_iso = _norm_iso(q_start, "00:00:00")
-        end_iso   = _norm_iso(q_end,   "00:00:00")
-        if not start_iso and end_iso:
-            end_dt = dt.datetime.fromisoformat(end_iso.replace("Z", ""))
-            start_dt = end_dt - dt.timedelta(days=30)
-        elif start_iso and not end_iso:
-            start_dt = dt.datetime.fromisoformat(start_iso.replace("Z", ""))
-            end_dt   = start_dt + dt.timedelta(days=30)
-        else:
-            start_dt = dt.datetime.fromisoformat(start_iso.replace("Z", ""))
-            end_dt   = dt.datetime.fromisoformat(end_iso.replace("Z", ""))
-
-    start_iso = start_dt.isoformat() + "Z"
-    end_iso   = end_dt.isoformat() + "Z"
-    range_days = max(0, (end_dt - start_dt).days)
-
-    # --- filter entries into window
-    def _in_window(ts_str: str) -> bool:
-        if not ts_str:
-            return False
-        try:
-            ts = dt.datetime.fromisoformat(ts_str.replace("Z", ""))
-        except Exception:
-            return False
-        return start_dt <= ts < end_dt
-
-    window_rows = [t for t in (store.read_json(f"{pref}ledger/index.json") or []) if _in_window(t.get("ts"))]
-
-    # --- window totals for the three cards + detail rows
-    income_total     = 0.0
-    expenses_total   = 0.0
-    debts_paid_total = 0.0
-
-    actual_by_cat  = {}
-    expense_rows   = []
-    debt_rows      = []
-
-    for t in window_rows:
-        amt  = float(t.get("amount") or 0.0)
-        kind = (t.get("kind") or "").lower()
-
-        if kind == "income":
-            income_total += amt
-
-        elif kind == "expense":
-            expenses_total += amt
-            cat = (t.get("category") or "other").lower()
-            actual_by_cat[cat] = actual_by_cat.get(cat, 0.0) + amt
-            expense_rows.append({"category": cat, "amount": amt})
-
-        elif kind == "debt_payment":
-            debts_paid_total += amt
-            name = t.get("debt_name") or "—"
-            debt_rows.append({"name": name, "paid": amt})
-
-    # --- expected spend from weekly budget, prorated to window length (expenses only)
-    from ..logic.weekly_budget import build_weekly_budget
-    plan   = store.read_json(f"{pref}plans/plan.json") or {}
-    weekly = build_weekly_budget(latest, plan)
-
-    def _expected_for_weekly(w: float) -> float:
-        return float(w or 0.0) * (range_days / 7.0)
-
-    # map weekly categories -> ledger categories
-    weekly_map = {
-        "clothes": "clothes",
-        "entertainment": "entertainment",
-        "grocery": "grocery",
-        "health_fitness": "health_fitness",
-        "utility": "utility",
-        "pet": "pet",
-        "uncategorized": "other",
-    }
-
-    expected_by_cat = {}
-    for wkey, wk_val in (weekly.get("costs_by_type_week") or {}).items():
-        cat = weekly_map.get(wkey, "other")
-        expected_by_cat[cat] = expected_by_cat.get(cat, 0.0) + _expected_for_weekly(wk_val)
-
-    # add groceries rule explicitly (weekly.groceries_week already accounts for HH size)
-    expected_by_cat["grocery"] = expected_by_cat.get("grocery", 0.0) + _expected_for_weekly(weekly.get("groceries_week") or 0.0)
-
-    # rollup totals for the comparison table
-    cats = sorted(set(expected_by_cat.keys()) | set(actual_by_cat.keys()))
-    delta_by_cat = {c: actual_by_cat.get(c, 0.0) - expected_by_cat.get(c, 0.0) for c in cats}
-    actual_total   = sum(actual_by_cat.values())
-    expected_total = sum(expected_by_cat.values())
-    delta_total    = actual_total - expected_total
-
-    # --- bundle everything the template expects under `budget`
-    budget = {
-        "start_iso": start_iso,
-        "end_iso": end_iso,
-        "range_days": range_days,
-        "actual_by_cat": actual_by_cat,
-        "expected_by_cat": expected_by_cat,
-        "delta_by_cat": delta_by_cat,
-        "actual_total": actual_total,
-        "expected_total": expected_total,
-        "delta_total": delta_total,
-        # new: the three cards and their detail rows
-        "income_total": income_total,
-        "expenses_total": expenses_total,
-        "debts_paid_total": debts_paid_total,
-        "expense_rows": sorted(expense_rows, key=lambda r: r["category"]),
-        "debt_rows": sorted(debt_rows, key=lambda r: r["name"]),
-    }
-
-    by_category = []
-    for c in sorted(set(expected_by_cat.keys()) | set(actual_by_cat.keys())):
-        by_category.append({
-            "category": c,
-            "actual":   round(actual_by_cat.get(c, 0.0), 2),
-            "expected": round(expected_by_cat.get(c, 0.0), 2),
-            "delta":    round(delta_by_cat.get(c, 0.0), 2),
-        })
-
-    budget["totals"] = {
-        "actual":   round(actual_total, 2),
-        "expected": round(expected_total, 2),
-        "delta":    round(delta_total, 2),
-    }
-    budget["by_category"] = by_category
+    # new date-range window + budget comparison
+    start_dt, end_dt = _window_from_query()
+    budget = _budget_compare(store, user_id, index=_entries(store, user_id), start_dt=start_dt, end_dt=end_dt)
 
     return render_template(
         "ledger_list.html",
         profile=latest,
-        ledger=index,          # your existing table (newest ~100)
-        stats=stats,           # legacy cards still work
-        budget=budget,         # new block (actual vs expected + card totals)
+        ledger=index,
+        stats=stats,          # existing data your template already uses
+        budget=budget,        # NEW block for Actual vs Expected UI
         start=budget["start_iso"],
         end=budget["end_iso"],
     )
