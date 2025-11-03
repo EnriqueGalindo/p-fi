@@ -1,5 +1,5 @@
 # app/blueprints/ledger.py
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, abort
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, abort, flash
 import datetime as dt
 from ..logic.ledger import apply_transaction, reverse_transaction
 from ..logic.ledger_stats import compute_ledger_stats
