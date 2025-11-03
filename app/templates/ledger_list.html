@@ -5,33 +5,107 @@
   .dash h2{margin:.2rem 0 1rem}
   .dash .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
   .muted{color:#6b7280}
-  .tagbar a{margin-right:.5rem;text-decoration:none;padding:.25rem .5rem;border:1px solid #e5e7eb;border-radius:999px}
-  .tagbar a.active{background:#111827;color:#fff;border-color:#111827}
   .mini-table{width:100%;border-collapse:collapse}
   .mini-table th,.mini-table td{border-bottom:1px solid #f1f5f9;padding:.35rem .25rem;text-align:left}
+  .pill{display:inline-block;border:1px solid #e5e7eb;border-radius:999px;padding:.25rem .6rem;text-decoration:none}
+  .barwrap{height:8px;background:#f3f4f6;border-radius:999px;overflow:hidden}
+  .bar{height:100%;background:#111827}
+  .good{color:#065f46} .bad{color:#7f1d1d}
+  .flex{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+  .btn{border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:.4rem .7rem;cursor:pointer}
+  .btn:focus{outline:none}
+  input[type=date]{border:1px solid #e5e7eb;border-radius:8px;padding:.35rem .5rem}
+  @media (max-width: 900px){ .dash .grid{grid-template-columns:1fr} }
 </style>
 
 <div class="card">
   <h1>Ledger</h1>
-    <p>
-      <a href="{{ url_for('ledger.new_entry_form') }}">+ Add entry</a>
-      &nbsp;&nbsp;|&nbsp;&nbsp;
-      <a href="{{ url_for('ledger.history') }}">History / Revert</a>
-    </p>
+  <p class="flex">
+    <a href="{{ url_for('ledger.new_entry_form') }}" class="pill">+ Add entry</a>
+    <a href="{{ url_for('ledger.history') }}" class="pill">History / Revert</a>
+  </p>
 
-  <!-- DASHBOARD -->
+  <!-- Window selector (replaces week/month/year toggles) -->
+  <form method="get" action="{{ url_for('ledger.list_entries') }}" class="dash" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label class="muted" for="start">Start</label><br>
+      <input id="start" name="start" type="date" value="{{ (start or '')[:10] }}">
+    </div>
+    <div>
+      <label class="muted" for="end">End</label><br>
+      <input id="end" name="end" type="date" value="{{ (end or '')[:10] }}">
+    </div>
+    <div>
+      <button class="btn" type="submit">Apply</button>
+      <a class="pill" href="{{ url_for('ledger.list_entries') }}" title="Reset to current month">This month</a>
+    </div>
+    <div class="muted" style="margin-left:auto">
+      Window: {{ (start or '')[:10] }} → {{ (end or '')[:10] }}
+    </div>
+  </form>
+
+  <!-- BUDGET COMPARISON: Actual vs Expected (from weekly budget prorated for window) -->
   <div class="dash">
-    <div class="tagbar" style="margin-bottom:.5rem">
-      {% set p = (stats.period or 'month') %}
-      <a href="{{ url_for('ledger.list_entries', period='week') }}" class="{{ 'active' if p=='week' else '' }}">Week</a>
-      <a href="{{ url_for('ledger.list_entries', period='month') }}" class="{{ 'active' if p=='month' else '' }}">Month</a>
-      <a href="{{ url_for('ledger.list_entries', period='year') }}" class="{{ 'active' if p=='year' else '' }}">Year</a>
-      <a href="{{ url_for('ledger.list_entries', period='all') }}" class="{{ 'active' if p=='all' else '' }}">All time</a>
+    <h2>Actual vs Expected (expenses only)</h2>
+    <div class="muted" style="margin-bottom:.5rem">
+      Expected is derived from your weekly budget, prorated for {{ budget.days }} day{{ 's' if budget.days != 1 else '' }}.
     </div>
-    <div class="muted" style="margin-bottom:.75rem">
-      Window: {{ stats.window.start }} → {{ stats.window.end }}
-    </div>
+    <div class="grid">
+      <!-- Totals card -->
+      <div>
+        <div style="font-weight:700;margin-bottom:.3rem">Totals</div>
+        <table class="mini-table">
+          <tbody>
+            <tr><td>Actual</td><td style="text-align:right">${{ '%.2f'|format(budget.totals.actual) }}</td></tr>
+            <tr><td>Expected</td><td style="text-align:right">${{ '%.2f'|format(budget.totals.expected) }}</td></tr>
+            <tr>
+              <td>Delta</td>
+              <td style="text-align:right">
+                {% set d = budget.totals.delta %}
+                <span class="{{ 'bad' if d>0 else 'good' if d<0 else '' }}">
+                  {{ '+' if d>0 else '' }}${{ '%.2f'|format(d) }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
+      <!-- Per-category table -->
+      <div style="grid-column:span 2;">
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th style="text-align:right">Actual</th>
+              <th style="text-align:right">Expected</th>
+              <th style="text-align:right">Δ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in budget.rows %}
+              {% set d = row.delta %}
+              <tr>
+                <td>{{ row.category }}</td>
+                <td style="text-align:right">${{ '%.2f'|format(row.actual) }}</td>
+                <td style="text-align:right">${{ '%.2f'|format(row.expected) }}</td>
+                <td style="text-align:right">
+                  <span class="{{ 'bad' if d>0 else 'good' if d<0 else '' }}">
+                    {{ '+' if d>0 else '' }}${{ '%.2f'|format(d) }}
+                  </span>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="4" class="muted">No categories in this window.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Your existing dashboard (still useful) -->
+  <div class="dash">
     <div class="grid">
       <!-- Money In -->
       <div>
@@ -100,9 +174,9 @@
     </div>
   </div>
 
-  <p><a href="{{ url_for('ledger.new_entry_form') }}">+ Add entry</a></p>
+  <p><a href="{{ url_for('ledger.new_entry_form') }}" class="pill">+ Add entry</a></p>
 
-  <!-- Existing ledger table -->
+  <!-- Entries table -->
   <table>
     <thead>
       <tr>
@@ -150,7 +224,7 @@
                 style="display:inline;">
             <button type="submit"
                     title="Delete"
-                    style="border:1px solid #e5e7eb;background:#fff;border-radius:8px;padding:.3rem .5rem;cursor:pointer">🗑</button>
+                    class="btn">🗑</button>
           </form>
           {% else %}
             —
