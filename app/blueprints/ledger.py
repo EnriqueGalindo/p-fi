@@ -187,3 +187,61 @@ def delete_entry(entry_id):
         pass  # safe to ignore
 
     return redirect(url_for("ledger.list_entries"))
+
+# --- History / Revert ---
+
+def _snap_path(user_id: str, snap_id: str) -> str:
+    # snap_id is like "2025-10-19T05-36-51Z" (your entry["id"] with ":" replaced by "-")
+    return f"{_prefix(user_id)}snapshots/{snap_id}.json"
+
+@bp.get("/history")
+def history():
+    """List recent revert points (taken from the ledger index)."""
+    user_id = current_app.config["USER_ID"]
+    # We use the ledger index as our list of restore points (1 per entry).
+    index = current_app.gcs.read_json(f"{_prefix(user_id)}ledger/index.json") or []
+    # newest first, show more if you like
+    index = sorted(index, key=lambda x: x.get("ts", ""), reverse=True)[:200]
+
+    # Each entry’s snapshot id used when it was created:
+    # snap_id = entry["id"].replace(":", "-")
+    rows = []
+    for t in index:
+        entry_id = (t.get("id") or "").replace(":", "-")
+        rows.append({
+            "snap_id": entry_id,
+            "ts": t.get("ts"),
+            "kind": t.get("kind"),
+            "amount": t.get("amount"),
+            "note": t.get("note") or "",
+        })
+    return render_template("ledger_history.html", rows=rows)
+
+@bp.post("/revert")
+def revert_to_snapshot():
+    """Restore latest.json to a selected snapshot; first back up current latest."""
+    user_id = current_app.config["USER_ID"]
+    store   = current_app.gcs
+
+    snap_id = (request.form.get("snap_id") or "").strip()
+    if not snap_id:
+        flash("Missing snapshot id.", "error")
+        return redirect(url_for("ledger.history"))
+
+    snap = store.read_json(_snap_path(user_id, snap_id))
+    if not snap:
+        flash("Snapshot not found.", "error")
+        return redirect(url_for("ledger.history"))
+
+    # 1) Back up current latest so the revert can itself be undone
+    now_iso = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    # Use a clear prefix so you can see it in GCS if needed
+    backup_id = f"manual-backup-{now_iso.replace(':','-')}"
+    latest = store.read_json(f"{_prefix(user_id)}latest.json") or {}
+    store.write_json(_snap_path(user_id, backup_id), latest)
+
+    # 2) Write selected snapshot to latest.json
+    store.write_json(f"{_prefix(user_id)}latest.json", snap)
+
+    flash(f"Restored profile to snapshot: {snap_id}", "success")
+    return redirect(url_for("ledger.list_entries"))

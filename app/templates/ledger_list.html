@@ -13,6 +13,11 @@
 
 <div class="card">
   <h1>Ledger</h1>
+    <p>
+      <a href="{{ url_for('ledger.new_entry_form') }}">+ Add entry</a>
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      <a href="{{ url_for('ledger.history') }}">History / Revert</a>
+    </p>
 
   <!-- DASHBOARD -->
   <div class="dash">
