@@ -354,6 +354,22 @@ def list_entries():
         "debt_rows": sorted(debt_rows, key=lambda r: r["name"]),
     }
 
+    by_category = []
+    for c in sorted(set(expected_by_cat.keys()) | set(actual_by_cat.keys())):
+        by_category.append({
+            "category": c,
+            "actual":   round(actual_by_cat.get(c, 0.0), 2),
+            "expected": round(expected_by_cat.get(c, 0.0), 2),
+            "delta":    round(delta_by_cat.get(c, 0.0), 2),
+        })
+
+    budget["totals"] = {
+        "actual":   round(actual_total, 2),
+        "expected": round(expected_total, 2),
+        "delta":    round(delta_total, 2),
+    }
+    budget["by_category"] = by_category
+
     return render_template(
         "ledger_list.html",
         profile=latest,
