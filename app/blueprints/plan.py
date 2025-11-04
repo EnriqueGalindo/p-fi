@@ -16,6 +16,13 @@ bp = Blueprint("plan", __name__, url_prefix="")
 #     if not session.get("user_email"):
 #         return redirect(url_for("auth.login_form"))
 
+def _to_float(x) -> float:
+    # robust: handles None, "", "1,234.56"
+    try:
+        return float(str(x).replace(",", ""))
+    except Exception:
+        return 0.0
+
 def _to_monthly(amount, interval):
     if amount is None:
         return 0.0
@@ -90,6 +97,15 @@ def overview():
     # Available = cash after reserving 1-month costs AND the step EF
     available = max(0.0, cash_now - monthly_required - ef_now)
 
+    accounts_rows = []
+    for a in accounts:
+        bal = _to_float(a.get("balance"))
+        accounts_rows.append({
+            "name":  a.get("name") or "",
+            "balance": round(bal, 2),
+            "type": (a.get("type") or ""),
+        })
+
     # debts sorted by APR, with months to payoff using min payments
     debts_rows = []
     for d in debts:
@@ -132,7 +148,7 @@ def overview():
 
     return render_template(
         "overview.html",
-        return_accounts=accounts,
+        accounts=accounts_rows,
         summary=summary,
         debts=debts_rows,
         costs=cost_rows,
