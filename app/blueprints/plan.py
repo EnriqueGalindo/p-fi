@@ -61,11 +61,6 @@ def overview():
     for a in accounts:
         if (a.get("type") or "").lower() in CASH_TYPES:
             cash_now += float(a.get("balance") or 0)
-            return_accounts = {
-                "name": a.get("name") or "",
-                "balance": round(float(a.get("balance") or 0), 2),
-                "type": (a.get("type") or "").lower(),
-            }
 
     # monthly expenses consistent with plan_engine
     costs_monthly = sum(_to_monthly(c.get("amount"), c.get("interval")) for c in costs)
@@ -137,7 +132,7 @@ def overview():
 
     return render_template(
         "overview.html",
-        return_accounts=return_accounts,
+        return_accounts=accounts,
         summary=summary,
         debts=debts_rows,
         costs=cost_rows,
