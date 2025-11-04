@@ -97,13 +97,14 @@ def overview():
         apr = float(d.get("apr") or 0)
         mp  = float(d.get("min_payment") or 0)
         months = _months_to_payoff(bal, apr, mp)
-        debts_rows.append({
-            "name": d.get("name") or "",
-            "balance": round(bal, 2),
-            "apr": round(apr, 2),
-            "min_payment": round(mp, 2),
-            "months_to_payoff": months,
-        })
+        if bal > 0:
+            debts_rows.append({
+                "name": d.get("name") or "",
+                "balance": round(bal, 2),
+                "apr": round(apr, 2),
+                "min_payment": round(mp, 2),
+                "months_to_payoff": months,
+            })
     debts_rows.sort(key=lambda x: x["apr"], reverse=True)
 
     # costs (include the new type)
