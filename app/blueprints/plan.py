@@ -98,7 +98,7 @@ def overview():
     available = max(0.0, cash_now - monthly_required - ef_now)
 
     accounts_rows = []
-    for a in accounts:
+    for a in latest.get("accounts", []) or []:
         bal = _to_float(a.get("balance"))
         accounts_rows.append({
             "name":  a.get("name") or "",
