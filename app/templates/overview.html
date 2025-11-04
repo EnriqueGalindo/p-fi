@@ -65,7 +65,7 @@
 <table>
   <thead><tr><th>Name</th><th>Balance</th><th>Type</th></tr></thead>
   <tbody>
-    {% for a in return_accounts %}
+    {% for a in accounts %}
     <tr>
       <td>{{ a.name }}</td>
       <td>${{ '%.2f'|format(a.balance) }}</td>
