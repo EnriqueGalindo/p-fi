@@ -61,6 +61,19 @@
     {% endif %}
     </div>
 
+<h3>Accounts</h3>
+<table>
+  <thead><tr><th>Name</th><th>Balance</th><th>Type</th></tr></thead>
+  <tbody>
+    {% for a in return_accounts %}
+    <tr>
+      <td>{{ a.name }}</td>
+      <td>${{ '%.2f'|format(a.balance) }}</td>
+      <td>{{ a.type }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
 
   <h3>Emergency Fund</h3>
 <p>
