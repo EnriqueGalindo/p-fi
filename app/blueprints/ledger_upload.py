@@ -241,18 +241,28 @@ def review_missing_routing():
     def _is_empty(v):
         return v is None or (isinstance(v, str) and v.strip() == "")
 
+    def _is_on_debt(r: dict) -> bool:
+        # Treat “charge on a debt” (or any debt-linked row) as routed
+        if (r.get("debt_name") or "").strip():
+            return True
+        if (r.get("balance_kind") or "").strip().lower() == "debt":
+            return True
+        return False
+
     def _needs_routing(r: dict) -> bool:
+        # Only show if BOTH from/to are empty AND it's not a debt-linked row
+        if _is_on_debt(r):
+            return False
         return _is_empty(r.get("from_account")) and _is_empty(r.get("to_account"))
 
-    # newest first
-    rows_all = sorted(index, key=lambda x: x.get("ts", ""), reverse=True)
+    rows_all = sorted(index, key=lambda x: x.get("ts",""), reverse=True)
 
     if target_batch:
         rows = [r for r in rows_all if r.get("import_batch") == target_batch and _needs_routing(r)]
         showing = f"Showing missing-routing from last import (batch {target_batch[:8]}…)"
     else:
         rows = [r for r in rows_all if _needs_routing(r)]
-        showing = "Showing all transactions missing routing (both from/to empty)"
+        showing = "Showing all transactions missing routing (both from/to empty, excluding debt-linked)"
 
     # Select options
     types = ["expense", "income", "transfer", "debt_payment"]
