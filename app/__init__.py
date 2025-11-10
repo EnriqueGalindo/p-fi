@@ -50,11 +50,13 @@ def create_app():
     from .blueprints.plan        import bp as plan_bp
     from .blueprints.ledger      import bp as ledger_bp
     from .blueprints.auth        import bp as auth_bp
+    from .blueprints.ledger_upload import bp as ledger_upload
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(ledger_bp)
     app.register_blueprint(onboarding_bp)
     app.register_blueprint(plan_bp)
+    app.register_blueprint(ledger_upload)
 
     return app
 
