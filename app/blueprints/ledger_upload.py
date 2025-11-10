@@ -121,7 +121,7 @@ def upload_ledger_csv():
         cols = _csv_cols(raw)
         try:
             ts_iso = _parse_date_to_iso(cols["date"])
-            amt = round(_to_float(cols["amount"]), 2)
+            amt = abs(round(_to_float(cols["amount"]), 2))
             note = (cols["description"] or "").strip()
             note_norm = _norm_desc(note)
             category = (cols["category"] or "").strip() or None
