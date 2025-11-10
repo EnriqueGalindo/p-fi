@@ -268,7 +268,7 @@ def review_missing_routing():
     debt_options = sorted({x for x in debt_options if x})
 
     return render_template(
-        "ledger_review_missing_routing.html",
+        "ledger_review.html",
         rows=rows[:500],
         categories=categories,
         types=types,
