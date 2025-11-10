@@ -50,9 +50,25 @@ class GcsStore:
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 8.0)
 
-    def read_json(self, path: str):
-        t = self.read_text(path)
-        return None if t is None else json.loads(t)
+    def read_json(self, path):
+        blob = self.bucket.blob(path)
+        try:
+            if not blob.exists():
+                return None
+            text = blob.download_as_text()
+        except gax_exc.NotFound:
+            return None
+        except Exception:
+            return None
+
+        if text is None or text.strip() == "":
+            return None
+        try:
+            return json.loads(text)
+        except Exception:
+            # If someone accidentally wrote plain text or double-encoded JSON,
+            # just return None so callers can default safely.
+            return None
 
     def write_json(self, path, obj):
         # Prefer real delete if obj is None
