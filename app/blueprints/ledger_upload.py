@@ -165,7 +165,7 @@ def upload_ledger_csv():
     store.write_json(idx_path, index)
 
     flash(f"Imported {inserted} new transactions. Skipped {skipped_dup} duplicates. Bad rows: {bad_rows}.", "success")
-    return redirect(url_for("ledger_upload.review_uncategorized"))
+    return redirect(url_for("ledger_upload.review"))
 
 @bp.get("/ledger/review")
 def review():
