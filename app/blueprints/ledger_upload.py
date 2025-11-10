@@ -6,6 +6,11 @@ import hashlib
 import datetime as dt
 from typing import Tuple, Dict, Any, List
 from flask import Blueprint, request, redirect, url_for, flash, current_app, render_template
+from ..services.utils import (
+    user_prefix,
+    current_user_identity,
+    now_iso,
+)
 
 bp = Blueprint("ledger_upload", __name__)
 
@@ -70,8 +75,6 @@ def upload_form():
 
 @bp.post("/ledger/upload")
 def upload_ledger_csv():
-    from .auth import current_user_identity
-    from ..services.utils import user_prefix
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
@@ -167,8 +170,6 @@ def upload_ledger_csv():
 @bp.get("/ledger/review")
 def review_uncategorized():
     """Simple bulk review UI for uncategorized items."""
-    from .auth import current_user_identity
-    from ..services.utils import user_prefix
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
@@ -195,8 +196,6 @@ def review_uncategorized():
 @bp.post("/ledger/review")
 def save_review():
     """Bulk apply categories/tags to entries selected on the review page."""
-    from .auth import current_user_identity
-    from ..services.utils import user_prefix
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)

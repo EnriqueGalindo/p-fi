@@ -6,12 +6,10 @@ from typing import Dict, Tuple
 
 from ..logic.ledger import apply_transaction, reverse_transaction
 from ..logic.ledger_stats import compute_ledger_stats
-from ..services.utils import current_user_identity, user_prefix
 from ..services.utils import (
     user_prefix,
     current_user_identity,
     now_iso,
-    window_from_strings,   
 )
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
