@@ -295,8 +295,10 @@ def create_entry():
     entry_path = f"{user_prefix(user_id)}ledger/entries/{entry['id'].replace(':','-')}.json"
     store.write_json(entry_path, entry)
     idx_path, d_entry = normalize_entry(user_id, entry)
+    idx = store.read_json(idx_path) or []
+    idx.append(d_entry)
 
-    store.write_json(idx_path, d_entry)
+    store.write_json(idx_path, idx)
 
     snap_ts = entry["id"].replace(":", "-")
     store.write_json(f"{user_prefix(user_id)}snapshots/{snap_ts}.json", updated)
