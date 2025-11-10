@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% block content %}
+<div class="card">
+  <h1>Review Uncategorized</h1>
+  <form action="{{ url_for('ledger_upload.save_review') }}" method="post">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left;">Date</th>
+          <th style="text-align:left;">Description</th>
+          <th style="text-align:right;">Amount</th>
+          <th style="text-align:left;">Category</th>
+          <th style="text-align:left;">Tags (comma-sep)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.ts[:10] }}</td>
+          <td>{{ r.description }}</td>
+          <td style="text-align:right;">${{ '%.2f'|format(r.amount|float) }}</td>
+          <td>
+            <select name="category-{{ r.id }}">
+              <option value=""></option>
+              {% for c in categories %}
+              <option value="{{ c }}" {% if r.category == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+              {% if r.amount > 0 %}
+              <option value="Income" {% if r.category == 'Income' %}selected{% endif %}>Income</option>
+              {% endif %}
+            </select>
+          </td>
+          <td>
+            <input name="tags-{{ r.id }}" value="{{ (r.tags or [])|join(', ') }}" placeholder="e.g. travel, work" style="width:100%;" />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="margin-top:1rem;">
+      <button type="submit">Save changes</button>
+      <a class="muted" href="{{ url_for('ledger.list_entries') }}" style="margin-left:.5rem;">Back to ledger</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

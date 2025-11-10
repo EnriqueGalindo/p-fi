@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block content %}
+<div class="card">
+  <h1>Upload Transactions CSV</h1>
+  <p class="muted">Columns accepted: <code>Date</code>, <code>Description</code>, <code>Category</code>, <code>Amount</code>, <code>Split</code>, <code>Tags</code></p>
+
+  <form action="{{ url_for('ledger_upload.upload_ledger_csv') }}" method="post" enctype="multipart/form-data" style="margin-top:1rem;">
+    <input type="file" name="file" accept=".csv" required />
+    <button type="submit">Upload</button>
+  </form>
+
+  <p style="margin-top:.75rem;"><a href="{{ url_for('ledger_upload.review_uncategorized') }}">Review uncategorized</a></p>
+</div>
+{% endblock %}
