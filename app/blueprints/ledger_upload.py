@@ -260,20 +260,37 @@ def review_missing_routing():
         "grocery","dining","rent","utilities","transportation","fuel",
         "entertainment","health","subscriptions","other","income","transfer","debt_payment"
     ]
+    latest = store.read_json(f"{pref}latest.json") or {}
+    account_options = [ (a.get("name") or "").strip() for a in (latest.get("accounts") or []) if (a.get("name") or "").strip() ]
+    account_options = sorted({x for x in account_options if x})
+
+    debt_options = [ (d.get("name") or "").strip() for d in (latest.get("debts") or []) if (d.get("name") or "").strip() ]
+    debt_options = sorted({x for x in debt_options if x})
 
     return render_template(
-        "ledger_review.html",
+        "ledger_review_missing_routing.html",
         rows=rows[:500],
         categories=categories,
         types=types,
         showing=showing,
         batch=target_batch,
+        account_options=account_options,
+        debt_options=debt_options,
     )
+
 
 
 @bp.post("/ledger/review")
 def save_review():
-    """Bulk-apply Type/Category/Note edits from the missing-routing review page."""
+    """Bulk-apply edits from the missing-routing review page.
+
+    Edits supported:
+      - kind (Type)
+      - category
+      - note
+      - from_account
+      - to_account OR debt_name (selecting a debt as 'debt::Name' sets debt_name)
+    """
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
@@ -288,48 +305,87 @@ def save_review():
     allowed_types = {"expense", "income", "transfer", "debt_payment"}
 
     changed = 0
-    index_by_id = { r.get("id"): r for r in index }
+    index_by_id = {r.get("id"): r for r in index}
 
     for eid, row in list(index_by_id.items()):
         type_key = f"type-{eid}"
         cat_key  = f"category-{eid}"
         note_key = f"note-{eid}"
+        from_key = f"from-{eid}"
+        to_key   = f"to-{eid}"
 
-        if not (type_key in form or cat_key in form or note_key in form):
+        if not any(k in form for k in (type_key, cat_key, note_key, from_key, to_key)):
             continue
 
         new_type = (form.get(type_key) or "").strip().lower() or None
         if new_type and new_type not in allowed_types:
-            new_type = None  # ignore invalid values
+            new_type = None
 
-        new_cat  = (form.get(cat_key) or "").strip() or None
-        new_note = (form.get(note_key) or "").strip() or None
+        new_cat   = (form.get(cat_key)  or "").strip() or None
+        new_note  = (form.get(note_key) or "").strip() or None
+        new_from  = (form.get(from_key) or "").strip() or None
+        to_raw    = (form.get(to_key)   or "").strip() or None
 
+        # Interpret to: either account name or 'debt::Name'
+        new_to_account = None
+        new_debt_name  = None
+        if to_raw:
+            if to_raw.startswith("debt::"):
+                new_debt_name = to_raw.split("debt::", 1)[1].strip() or None
+            else:
+                new_to_account = to_raw
+
+        # Load and compare
         epath = f"{pref}ledger/entries/{eid}.json"
         entry = store.read_json(epath) or {}
 
         cur_type = (entry.get("kind") or "").lower() or None
         cur_cat  = entry.get("category") or None
         cur_note = entry.get("note") or None
+        cur_from = entry.get("from_account") or None
+        cur_to   = entry.get("to_account") or None
+        cur_debt = entry.get("debt_name") or None
 
         entry_changed = False
 
+        # kind
         if new_type and new_type != cur_type:
             entry["kind"] = new_type
             row["kind"] = new_type
             entry_changed = True
 
+        # category
         if new_cat != cur_cat:
             entry["category"] = new_cat
             row["category"] = new_cat
             entry_changed = True
 
+        # note (sync legacy 'description' for any older views)
         if new_note != cur_note:
             entry["note"] = new_note
-            # keep legacy fields in sync if they exist in your UI
             entry["description"] = new_note
             row["note"] = new_note
             row["description"] = new_note
+            entry_changed = True
+
+        # from_account
+        if new_from != cur_from:
+            entry["from_account"] = new_from
+            row["from_account"] = new_from
+            entry_changed = True
+
+        # to_account / debt_name (mutually exclusive when debt chosen)
+        if (new_to_account != cur_to) or (new_debt_name != cur_debt):
+            entry["to_account"] = new_to_account
+            entry["debt_name"]  = new_debt_name
+            row["to_account"]   = new_to_account
+            row["debt_name"]    = new_debt_name
+
+            # If user targeted a debt and type wasn't set, coerce to debt_payment
+            if new_debt_name and (new_type is None) and cur_type != "debt_payment":
+                entry["kind"] = "debt_payment"
+                row["kind"] = "debt_payment"
+            # If user cleared debt and picked an account, and type is debt_payment without debt, keep as-is
             entry_changed = True
 
         if entry_changed:

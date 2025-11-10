@@ -5,6 +5,7 @@
 
   <form action="{{ url_for('ledger_upload.save_review') }}" method="post">
     {% if batch %}<input type="hidden" name="batch" value="{{ batch }}"/>{% endif %}
+
     <table style="width:100%;border-collapse:collapse;">
       <thead>
         <tr>
@@ -22,6 +23,7 @@
         <tr>
           <td>{{ r.ts[:10] }}</td>
           <td style="text-align:right;">${{ '%.2f'|format(r.amount|float) }}</td>
+
           <td>
             <select name="type-{{ r.id }}">
               {% for t in types %}
@@ -29,6 +31,7 @@
               {% endfor %}
             </select>
           </td>
+
           <td>
             <select name="category-{{ r.id }}">
               <option value=""></option>
@@ -37,11 +40,38 @@
               {% endfor %}
             </select>
           </td>
+
           <td>
             <input name="note-{{ r.id }}" value="{{ r.note or '' }}" placeholder="Add a note…" style="width:100%;" />
           </td>
-          <td class="muted">{{ r.from_account or "—" }}</td>
-          <td class="muted">{{ r.to_account or "—" }}</td>
+
+          <!-- FROM: accounts only -->
+          <td>
+            <select name="from-{{ r.id }}">
+              <option value=""></option>
+              {% for a in account_options %}
+              <option value="{{ a }}" {% if (r.from_account or '') == a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </td>
+
+          <!-- TO: accounts + debts (debts prefixed as debt::Name) -->
+          <td>
+            <select name="to-{{ r.id }}">
+              <option value=""></option>
+              {% for a in account_options %}
+              <option value="{{ a }}" {% if (r.to_account or '') == a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+              {% if debt_options and debt_options|length %}
+              <optgroup label="Debts">
+                {% for d in debt_options %}
+                {% set v = 'debt::' ~ d %}
+                <option value="{{ v }}" {% if (r.debt_name or '') == d %}selected{% endif %}>{{ d }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endif %}
+            </select>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
