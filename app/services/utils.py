@@ -287,10 +287,8 @@ def window_from_strings(q_start: str, q_end: str
     return month_window(fallback_today)
 
 def append_index(user_id: str, entry: dict):
-    store = current_app.gcs
     idx_path = f"{user_prefix(user_id)}ledger/index.json"
-    idx = store.read_json(idx_path) or []
-    idx.append({
+    d_entry = {
         "id": entry.get("id"),
         "ts": entry.get("ts"),
         "kind": entry.get("kind"),
@@ -309,5 +307,5 @@ def append_index(user_id: str, entry: dict):
         "balance_name_to": entry.get("balance_name_to"),
         "balance_after_to": entry.get("balance_after_to"),
         "account_after": entry.get("account_after"),
-    })
-    store.write_json(idx_path, idx)
+    }
+    return idx_path, d_entry

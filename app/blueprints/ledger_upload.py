@@ -11,8 +11,13 @@ from ..services.utils import (
     user_prefix,
     current_user_identity,
     now_iso,
-    append_index,
+    normalize_entry,
 )
+
+COST_TYPES = {
+    "health_fitness", "grocery", "entertainment", "utility",
+    "pet", "clothes", "other"
+}
 
 bp = Blueprint("ledger_upload", __name__)
 
@@ -139,24 +144,15 @@ def upload_ledger_csv():
         entry = {
             "id": eid,
             "ts": ts_iso,
-            "amount": amt,
+            "amount": abs(amt),
             "kind": kind,
             "note": note,
             "category": category, 
-            "split": split,           # stored as provided
-            "tags": tags,             # list[str] or None
         }
 
         # write entry and update index
         store.write_json(f"{pref}ledger/review/{eid}.json", entry)
-        index.append({
-            "id": eid,
-            "ts": ts_iso,
-            "amount": amt,
-            "kind": kind,
-            "note": note,
-            "category": category
-        })
+        index.append(entry)
 
         existing.add(key)
         inserted += 1
@@ -177,9 +173,6 @@ def review():
     # Read the REVIEW inbox (not the live ledger)
     review_idx_path = f"{pref}ledger/review/index.json"
     index: list[dict] = store.read_json(review_idx_path) or []
-
-    # Optional batch param is accepted but NOT used to filter anymore
-    batch = request.args.get("batch") or None
     showing = "Showing all transactions in the review inbox (no filters)"
 
     # Newest first; no filtering
@@ -189,13 +182,7 @@ def review():
     types = ["expense", "income", "transfer", "debt_payment"]
 
     # Derive categories from inbox (or fall back to defaults)
-    categories = sorted({
-        (r.get("category") or "").strip()
-        for r in index if (r.get("category") or "").strip()
-    }) or [
-        "grocery","dining","rent","utilities","transportation","fuel",
-        "entertainment","health","subscriptions","other","income","transfer","debt_payment"
-    ]
+    categories = COST_TYPES.copy()
 
     # Account/debt options from latest.json
     latest = store.read_json(f"{pref}latest.json") or {}
@@ -218,7 +205,6 @@ def review():
         account_options=account_options,
         debt_options=debt_options,
         showing=showing,
-        batch=batch,
     )
 
 
@@ -230,8 +216,6 @@ def save_review():
     store = current_app.gcs
 
     form = request.form
-    batch = (form.get("batch") or "").strip() or None
-
     # --- review inbox ---
     review_idx_path = f"{pref}ledger/review/index.json"
     review_index = store.read_json(review_idx_path) or []
@@ -307,20 +291,10 @@ def save_review():
         entry_path = f"{pref}ledger/entries/{entry['id'].replace(':','-')}.json"
         store.write_json(entry_path, entry)
 
+        idx_path, d_entry = normalize_entry(user_id, entry)
+
         # collect index row (don’t write yet)
-        new_index_rows.append({
-            "id": entry["id"],
-            "ts": entry["ts"],
-            "amount": entry["amount"],
-            "kind": entry["kind"],
-            "note": entry.get("note"),
-            "description": entry.get("note"),   # for legacy views
-            "category": entry.get("category"),
-            "from_account": entry.get("from_account"),
-            "to_account": entry.get("to_account"),
-            "debt_name": entry.get("debt_name"),
-            "tags": entry.get("tags"),
-        })
+        new_index_rows.append(d_entry)
 
         # snapshot + latest
         snap_ts = entry["id"].replace(":", "-")

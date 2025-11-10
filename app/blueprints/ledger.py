@@ -10,7 +10,7 @@ from ..services.utils import (
     user_prefix,
     current_user_identity,
     now_iso,
-    append_index
+    normalize_entry
 )
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
@@ -292,7 +292,9 @@ def create_entry():
 
     entry_path = f"{user_prefix(user_id)}ledger/entries/{entry['id'].replace(':','-')}.json"
     store.write_json(entry_path, entry)
-    append_index(user_id, entry)
+    idx_path, d_entry = normalize_entry(user_id, entry)
+
+    store.write_json(idx_path, d_entry)
 
     snap_ts = entry["id"].replace(":", "-")
     store.write_json(f"{user_prefix(user_id)}snapshots/{snap_ts}.json", updated)
