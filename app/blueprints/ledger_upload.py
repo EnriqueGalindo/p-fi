@@ -225,8 +225,6 @@ def review_uncategorized():
 @bp.post("/ledger/review")
 def save_review():
     """Bulk-apply Type/Category/Note edits from the routing review page."""
-    from .auth import current_user_identity
-    from ..services.utils import user_prefix
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
