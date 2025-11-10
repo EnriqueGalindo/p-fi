@@ -224,42 +224,36 @@ def review():
 
 @bp.post("/ledger/review")
 def save_review():
-    """
-    Apply reviewed transactions from the review inbox to the real ledger.
+    from .auth import current_user_identity
+    from ..services.utils import user_prefix, now_iso
+    from ..logic.ledger import apply_transaction
 
-    Expects form inputs per row:
-      type-<id>, category-<id>, note-<id>, from-<id>, to-<id>
-    (with 'to-<id>' either an account name or 'debt::<Debt Name>')
-
-    After applying via apply_transaction, removes processed rows from
-    ledger/review/<id>.json and rewrites ledger/review/index.json.
-    """
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
     store = current_app.gcs
 
-    # --- load inbox (review) index ---
-    review_idx_path = f"{pref}ledger/review/index.json"
-    review_index: list[dict] = store.read_json(review_idx_path) or []
-
     form = request.form
-    batch = (form.get("batch") or "").strip() or None  # optional
+    batch = (form.get("batch") or "").strip() or None
 
-    # --- load current state for apply_transaction ---
+    # --- review inbox ---
+    review_idx_path = f"{pref}ledger/review/index.json"
+    review_index = store.read_json(review_idx_path) or []
+    review_by_id = {r.get("id"): r for r in review_index}
+
+    # --- main ledger index (load once) ---
+    main_idx_path = f"{pref}ledger/index.json"
+    main_index = store.read_json(main_idx_path) or []
+
+    # --- current state ---
     latest_path = f"{pref}latest.json"
     latest = store.read_json(latest_path) or {}
 
-    # Allowed kinds
     allowed_types = {"expense", "income", "transfer", "debt_payment"}
-
-    # Build map for faster removal later
-    review_by_id = { r.get("id"): r for r in review_index }
-
-    processed_ids: list[str] = []
+    processed_ids = []
+    new_index_rows = []   # collect index rows to append once
     changed_count = 0
 
-    def _split_to_target(to_raw: str | None) -> tuple[str | None, str | None]:
-        """Return (to_account, debt_name) from TO value."""
+    def _split_to_target(to_raw: str | None):
         if not to_raw:
             return None, None
         to_raw = to_raw.strip()
@@ -269,93 +263,101 @@ def save_review():
             return None, to_raw.split("debt::", 1)[1].strip() or None
         return to_raw, None
 
-    # iterate over rows that were rendered (we key off presence of any field)
-    for eid, r in list(review_by_id.items()):
-        k_type = f"type-{eid}"
-        k_cat  = f"category-{eid}"
-        k_note = f"note-{eid}"
-        k_from = f"from-{eid}"
-        k_to   = f"to-{eid}"
-
+    # iterate only over rows present in the submitted form
+    for rid, r in list(review_by_id.items()):
+        k_type = f"type-{rid}"; k_cat = f"category-{rid}"; k_note = f"note-{rid}"
+        k_from = f"from-{rid}"; k_to = f"to-{rid}"
         if not any(k in form for k in (k_type, k_cat, k_note, k_from, k_to)):
-            continue  # not on the page (or not submitted)
+            continue
 
-        # pull original values from review row (fallbacks)
-        base_kind   = (r.get("kind") or "").lower()
-        base_note   = r.get("note") or ""
-        base_cat    = r.get("category") or None
+        base_kind = (r.get("kind") or "").lower()
+        base_ts = r.get("ts") or now_iso()
         base_amount = float(r.get("amount") or 0.0)
-        base_ts     = r.get("ts") or now_iso()
 
-        # new values from form
         new_type = (form.get(k_type) or "").strip().lower() or base_kind
         if new_type not in allowed_types:
             new_type = base_kind
 
-        new_cat  = (form.get(k_cat)  or "").strip() or None
-        new_note = (form.get(k_note) or "").strip() or base_note
+        new_cat = (form.get(k_cat) or "").strip() or None
+        new_note = (form.get(k_note) or "").strip() or (r.get("note") or "")
         new_from = (form.get(k_from) or "").strip() or None
-        to_raw   = (form.get(k_to)   or "").strip() or None
+        to_raw = (form.get(k_to) or "").strip() or None
         new_to_account, new_debt_name = _split_to_target(to_raw)
 
-        # If user selected a debt as the target and didn't explicitly choose kind,
-        # coerce to debt_payment.
+        # if user targeted a debt and didn’t change type, coerce to debt_payment
         if new_debt_name and new_type == base_kind and new_type != "debt_payment":
             new_type = "debt_payment"
 
-        # Build the transaction object for apply_transaction
-        ts_now = now_iso()  # use now for the unique ID
         tx = {
-            "id": ts_now,           # unique id (do NOT reuse review id)
-            "ts": base_ts,          # keep the CSV (or edited) transaction date
-            "kind": new_type,       # expense | income | transfer | debt_payment
-            "amount": base_amount,  # positive number as in your schema
+            "id": now_iso(),     # unique
+            "ts": base_ts,
+            "kind": new_type,
+            "amount": base_amount,
             "note": new_note,
             "from_account": new_from,
             "to_account": new_to_account,
             "category": new_cat,
             "debt_name": new_debt_name,
-            # Optional splits (not provided in review UI yet)
             "principal_portion": None,
             "interest_portion": None,
-            # Income extras (optional)
             "income_subtype": None,
             "income_source": None,
         }
 
-        # --- apply + persist to the real ledger ---
         updated, entry = apply_transaction(latest, tx)
 
-        # Write the canonical entry
+        # write entry
         entry_path = f"{pref}ledger/entries/{entry['id'].replace(':','-')}.json"
         store.write_json(entry_path, entry)
 
-        # Mirror to main index
-        append_index(user_id, entry)
+        # collect index row (don’t write yet)
+        new_index_rows.append({
+            "id": entry["id"],
+            "ts": entry["ts"],
+            "amount": entry["amount"],
+            "kind": entry["kind"],
+            "note": entry.get("note"),
+            "description": entry.get("note"),   # for legacy views
+            "category": entry.get("category"),
+            "from_account": entry.get("from_account"),
+            "to_account": entry.get("to_account"),
+            "debt_name": entry.get("debt_name"),
+            "tags": entry.get("tags"),
+        })
 
-        # Snapshot + latest state
+        # snapshot + latest
         snap_ts = entry["id"].replace(":", "-")
         store.write_json(f"{pref}snapshots/{snap_ts}.json", updated)
         store.write_json(f"{pref}latest.json", updated)
-
-        # advance latest for next iteration
         latest = updated
+
+        processed_ids.append(rid)
         changed_count += 1
-        processed_ids.append(eid)
 
-    # --- remove processed items from review inbox ---
+    # single write to main index
+    if new_index_rows:
+        main_index.extend(new_index_rows)
+        store.write_json(main_idx_path, main_index)
+
+    # clear processed review files and rewrite review index once
     if processed_ids:
-        # delete files
-        for rid in processed_ids:
-            store.write_json(f"{pref}ledger/review/{rid}.json", None)  # or store.delete(... if available)
-
-        # rewrite inbox index without processed rows
-        remaining = [r for r in review_index if r.get("id") not in processed_ids]
+        remaining = []
+        for r in review_index:
+            if r.get("id") in processed_ids:
+                # prefer actual delete if available
+                if hasattr(store, "delete"):
+                    try:
+                        store.delete(f"{pref}ledger/review/{r['id']}.json")
+                    except Exception:
+                        pass
+                else:
+                    # fallback: overwrite with {} to reduce payload vs "null"
+                    store.write_json(f"{pref}ledger/review/{r['id']}.json", {})
+            else:
+                remaining.append(r)
         store.write_json(review_idx_path, remaining)
 
     flash(f"Applied {changed_count} transaction(s) from review.", "success")
-
-    # stay on review (preserve batch if present)
-    if batch:
-        return redirect(url_for("ledger_upload.review", batch=batch))
+    if (form.get("batch") or "").strip():
+        return redirect(url_for("ledger_upload.review", batch=form.get("batch")))
     return redirect(url_for("ledger_upload.review"))
