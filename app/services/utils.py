@@ -286,7 +286,7 @@ def window_from_strings(q_start: str, q_end: str
             pass
     return month_window(fallback_today)
 
-def append_index(user_id: str, entry: dict):
+def normalize_entry(user_id: str, entry: dict):
     idx_path = f"{user_prefix(user_id)}ledger/index.json"
     d_entry = {
         "id": entry.get("id"),
