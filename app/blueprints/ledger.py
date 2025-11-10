@@ -10,7 +10,7 @@ from ..services.utils import (
     user_prefix,
     current_user_identity,
     now_iso,
-    normalize_entry
+    normalize_entry,
 )
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
