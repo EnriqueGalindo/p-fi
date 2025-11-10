@@ -1,36 +1,48 @@
 {% extends "base.html" %}{% block content %}
 <div class="card">
-  <h1>Review Uncategorized</h1>
+  <h1>Review: Missing Routing</h1>
+  <p class="muted">{{ showing }}</p>
+
   <form action="{{ url_for('ledger_upload.save_review') }}" method="post">
     <table style="width:100%;border-collapse:collapse;">
       <thead>
         <tr>
           <th style="text-align:left;">Date</th>
-          <th style="text-align:left;">Description</th>
           <th style="text-align:right;">Amount</th>
+          <th style="text-align:left;">Type</th>
           <th style="text-align:left;">Category</th>
-          <th style="text-align:left;">Tags (comma-sep)</th>
+          <th style="text-align:left;">Note</th>
+          <th style="text-align:left;">From</th>
+          <th style="text-align:left;">To / Debt</th>
         </tr>
       </thead>
       <tbody>
         {% for r in rows %}
         <tr>
           <td>{{ r.ts[:10] }}</td>
-          <td>{{ r.description }}</td>
           <td style="text-align:right;">${{ '%.2f'|format(r.amount|float) }}</td>
+          <td>
+            <select name="type-{{ r.id }}">
+              {% for t in types %}
+              <option value="{{ t }}" {% if (r.kind or '') == t %}selected{% endif %}>{{ t }}</option>
+              {% endfor %}
+            </select>
+          </td>
           <td>
             <select name="category-{{ r.id }}">
               <option value=""></option>
               {% for c in categories %}
-              <option value="{{ c }}" {% if r.category == c %}selected{% endif %}>{{ c }}</option>
+              <option value="{{ c }}" {% if (r.category or '') == c %}selected{% endif %}>{{ c }}</option>
               {% endfor %}
-              {% if r.amount > 0 %}
-              <option value="Income" {% if r.category == 'Income' %}selected{% endif %}>Income</option>
-              {% endif %}
             </select>
           </td>
           <td>
-            <input name="tags-{{ r.id }}" value="{{ (r.tags or [])|join(', ') }}" placeholder="e.g. travel, work" style="width:100%;" />
+            <input name="note-{{ r.id }}" value="{{ r.note or r.notes or r.description or '' }}" placeholder="Add a note…" style="width:100%;" />
+          </td>
+          <td class="muted">{{ r.from or "—" }}</td>
+          <td class="muted">{{ r.to or r.debt_name or "—" }}</td>
+          <td class="muted">
+            {% if r.tags %}{{ (r.tags or [])|join(', ') }}{% else %}—{% endif %}
           </td>
         </tr>
         {% endfor %}

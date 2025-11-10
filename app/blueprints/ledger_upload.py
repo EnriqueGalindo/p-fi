@@ -9,7 +9,6 @@ from flask import Blueprint, request, redirect, url_for, flash, current_app, ren
 from ..services.utils import (
     user_prefix,
     current_user_identity,
-    now_iso,
 )
 
 bp = Blueprint("ledger_upload", __name__)
@@ -169,33 +168,65 @@ def upload_ledger_csv():
 
 @bp.get("/ledger/review")
 def review_uncategorized():
-    """Simple bulk review UI for uncategorized items."""
+    """Review items missing routing (either from or to is null)."""
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
     store = current_app.gcs
 
     idx_path = f"{pref}ledger/index.json"
-    index: List[dict] = store.read_json(idx_path) or []
+    index: list[dict] = store.read_json(idx_path) or []
 
-    # newest first; show only uncategorized (or blank) entries
-    rows = []
-    for r in sorted(index, key=lambda x: x.get("ts",""), reverse=True):
-        cat = r.get("category")
-        if not cat or str(cat).strip() == "":
-            rows.append(r)
+    # Optional: support ?batch=… to scope to last import or a given batch
+    batch = request.args.get("batch")
+    last_import = store.read_json(f"{pref}ledger/last_import.json") or {}
+    target_batch = batch or last_import.get("batch_id")
 
-    # lightweight category list: you can replace with your canonical set
-    all_cats = sorted({ (r.get("category") or "").strip() for r in index if r.get("category") }) or [
-        "Groceries", "Dining", "Rent", "Utilities", "Transportation", "Fuel",
-        "Entertainment", "Health", "Subscriptions", "Other", "Income"
+    def _needs_routing(r: dict) -> bool:
+        # treat "", None, missing as null
+        frm = (r.get("from") or "").strip() if isinstance(r.get("from"), str) else r.get("from")
+        to_  = (r.get("to") or "").strip() if isinstance(r.get("to"), str) else r.get("to")
+        # allow debt target to count as 'to'
+        debt = (r.get("debt_name") or "").strip()
+        # needs routing if from OR to are blank (and no debt target)
+        missing_from = (frm is None) or (frm == "")
+        missing_to   = ((to_ is None) or (to_ == "")) and (debt == "")
+        return missing_from or missing_to
+
+    # newest first
+    rows_all = sorted(index, key=lambda x: x.get("ts",""), reverse=True)
+
+    # filter by batch (if present) and by missing routing
+    if target_batch:
+        rows = [r for r in rows_all if r.get("import_batch") == target_batch and _needs_routing(r)]
+        showing = f"Showing items needing routing from last import (batch {target_batch[:8]}…)"
+    else:
+        rows = [r for r in rows_all if _needs_routing(r)]
+        showing = "Showing all items needing routing (from/to missing)"
+
+    # Allowed types (transaction kinds)
+    types = ["expense", "income", "transfer", "debt_payment"]
+
+    # Category options (tweak to your canonical set)
+    categories = sorted({ (r.get("category") or "").strip() for r in index if r.get("category") }) or [
+        "Groceries","Dining","Rent","Utilities","Transportation","Fuel",
+        "Entertainment","Health","Subscriptions","Other","Income","Transfer","Debt Payment"
     ]
 
-    return render_template("ledger_review.html", rows=rows[:300], categories=all_cats)
+    return render_template(
+        "ledger_review_routing.html",
+        rows=rows[:500],
+        categories=categories,
+        types=types,
+        showing=showing,
+        batch=target_batch,
+    )
 
 @bp.post("/ledger/review")
 def save_review():
-    """Bulk apply categories/tags to entries selected on the review page."""
+    """Bulk-apply Type/Category/Note edits from the routing review page."""
+    from .auth import current_user_identity
+    from ..services.utils import user_prefix
 
     _, user_id = current_user_identity()
     pref = user_prefix(user_id)
@@ -204,33 +235,76 @@ def save_review():
     idx_path = f"{pref}ledger/index.json"
     index: List[dict] = store.read_json(idx_path) or []
 
-    # incoming form: fields like category-<id>, tags-<id>
     form = request.form
+    # If your template includes: <input type="hidden" name="batch" value="{{ batch }}">
+    batch = (form.get("batch") or "").strip() or None
+
+    # Allowed kinds (normalize to lowercase)
+    allowed_types = {"expense", "income", "transfer", "debt_payment"}
+
     changed = 0
+    index_by_id = {r.get("id"): r for r in index}
 
-    index_by_id = { r.get("id"): r for r in index }
     for eid, row in list(index_by_id.items()):
-        cat_key = f"category-{eid}"
-        tag_key = f"tags-{eid}"
-        if cat_key in form or tag_key in form:
-            new_cat = (form.get(cat_key) or "").strip() or None
-            new_tags = [t.strip() for t in (form.get(tag_key) or "").split(",") if t.strip()] or None
+        type_key = f"type-{eid}"
+        cat_key  = f"category-{eid}"
+        note_key = f"note-{eid}"
 
-            # update entry file
-            epath = f"{pref}ledger/entries/{eid}.json"
-            entry = store.read_json(epath) or {}
-            if (entry.get("category") or None) != new_cat or (entry.get("tags") or None) != new_tags:
-                entry["category"] = new_cat
-                entry["tags"] = new_tags
-                store.write_json(epath, entry)
+        if not (type_key in form or cat_key in form or note_key in form):
+            continue
 
-                # mirror in index
-                row["category"] = new_cat
-                row["tags"] = new_tags
-                changed += 1
+        # Pull new values (normalize empties to None)
+        new_type = (form.get(type_key) or "").strip().lower() or None
+        if new_type and new_type not in allowed_types:
+            new_type = None  # ignore invalid value
+
+        new_cat = (form.get(cat_key) or "").strip() or None
+        new_note = (form.get(note_key) or "").strip() or None
+
+        # Load entry file
+        epath = f"{pref}ledger/entries/{eid}.json"
+        entry = store.read_json(epath) or {}
+
+        # Current values (note/description may be in different keys)
+        cur_type = (entry.get("kind") or "").lower() or None
+        cur_cat  = entry.get("category") or None
+        cur_note = entry.get("note") or entry.get("notes") or entry.get("description") or None
+
+        # Track whether this entry changes
+        entry_changed = False
+
+        # Apply type
+        if new_type and new_type != cur_type:
+            entry["kind"] = new_type
+            row["kind"] = new_type
+            entry_changed = True
+
+        # Apply category (can be cleared)
+        if new_cat != cur_cat:
+            entry["category"] = new_cat
+            row["category"] = new_cat
+            entry_changed = True
+
+        # Apply note (keep note/notes/description in sync for legacy views)
+        if new_note != cur_note:
+            entry["note"] = new_note
+            entry["notes"] = new_note
+            entry["description"] = new_note
+            row["note"] = new_note
+            row["description"] = new_note
+            entry_changed = True
+
+        if entry_changed:
+            store.write_json(epath, entry)
+            changed += 1
 
     if changed:
+        # Persist updated index
         store.write_json(idx_path, list(index_by_id.values()))
 
     flash(f"Updated {changed} transaction(s).", "success")
+
+    # Back to the same review; preserve batch filter if provided
+    if batch:
+        return redirect(url_for("ledger_upload.review_uncategorized", batch=batch))
     return redirect(url_for("ledger_upload.review_uncategorized"))
