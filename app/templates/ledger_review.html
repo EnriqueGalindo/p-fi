@@ -4,6 +4,7 @@
   <p class="muted">{{ showing }}</p>
 
   <form action="{{ url_for('ledger_upload.save_review') }}" method="post">
+    {% if batch %}<input type="hidden" name="batch" value="{{ batch }}"/>{% endif %}
     <table style="width:100%;border-collapse:collapse;">
       <thead>
         <tr>
@@ -13,7 +14,7 @@
           <th style="text-align:left;">Category</th>
           <th style="text-align:left;">Note</th>
           <th style="text-align:left;">From</th>
-          <th style="text-align:left;">To / Debt</th>
+          <th style="text-align:left;">To</th>
         </tr>
       </thead>
       <tbody>
@@ -37,13 +38,10 @@
             </select>
           </td>
           <td>
-            <input name="note-{{ r.id }}" value="{{ r.note or r.notes or r.description or '' }}" placeholder="Add a note…" style="width:100%;" />
+            <input name="note-{{ r.id }}" value="{{ r.note or '' }}" placeholder="Add a note…" style="width:100%;" />
           </td>
-          <td class="muted">{{ r.from or "—" }}</td>
-          <td class="muted">{{ r.to or r.debt_name or "—" }}</td>
-          <td class="muted">
-            {% if r.tags %}{{ (r.tags or [])|join(', ') }}{% else %}—{% endif %}
-          </td>
+          <td class="muted">{{ r.from_account or "—" }}</td>
+          <td class="muted">{{ r.to_account or "—" }}</td>
         </tr>
         {% endfor %}
       </tbody>
