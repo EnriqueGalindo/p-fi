@@ -214,7 +214,7 @@ def review_uncategorized():
     ]
 
     return render_template(
-        "ledger_review_routing.html",
+        "ledger_review.html",
         rows=rows[:500],
         categories=categories,
         types=types,
