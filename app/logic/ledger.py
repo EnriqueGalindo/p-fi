@@ -8,15 +8,6 @@ COST_TYPES = {
 }
 CASH_TYPES = {"cash", "checking", "savings"}  # for visibility only
 
-def _now_iso():
-    return dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
-
-def _find_by_name(items, name):
-    for x in items or []:
-        if (x.get("name") or "").strip() == (name or "").strip():
-            return x
-    return None
-
 def reverse_transaction(snapshot: dict, entry: dict):
     """
     Undo a single persisted ledger entry against the snapshot (latest.json).

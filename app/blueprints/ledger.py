@@ -10,6 +10,7 @@ from ..services.utils import (
     user_prefix,
     current_user_identity,
     now_iso,
+    append_index
 )
 
 bp = Blueprint("ledger", __name__, url_prefix="/ledger")
@@ -18,33 +19,6 @@ bp = Blueprint("ledger", __name__, url_prefix="/ledger")
 # ----------------------------
 # Helpers
 # ----------------------------
-def _append_index(user_id: str, entry: dict):
-    store = current_app.gcs
-    idx_path = f"{user_prefix(user_id)}ledger/index.json"
-    idx = store.read_json(idx_path) or []
-    idx.append({
-        "id": entry.get("id"),
-        "ts": entry.get("ts"),
-        "kind": entry.get("kind"),
-        "amount": entry.get("amount"),
-        "from_account": entry.get("from_account"),
-        "to_account": entry.get("to_account"),
-        "debt_name": entry.get("debt_name"),
-        "category": entry.get("category"),
-        "note": entry.get("note"),
-        # balance display helpers
-        "balance_kind": entry.get("balance_kind"),
-        "balance_name": entry.get("balance_name"),
-        "balance_after": entry.get("balance_after"),
-        "balance_name_from": entry.get("balance_name_from"),
-        "balance_after_from": entry.get("balance_after_from"),
-        "balance_name_to": entry.get("balance_name_to"),
-        "balance_after_to": entry.get("balance_after_to"),
-        "account_after": entry.get("account_after"),
-    })
-    store.write_json(idx_path, idx)
-
-
 def _parse_ymd(s: str) -> dt.datetime:
     # Accept YYYY-MM-DD or full ISO; normalize to datetime (UTC, no tz info).
     s = (s or "").strip()
@@ -271,7 +245,6 @@ def create_entry():
     amount = float(request.form.get("amount") or 0)
     note   = (request.form.get("note") or "").strip()
 
-    # optional date coming from the form (hidden canon_date)
     ts_date = (request.form.get("ts_date") or "").strip()
 
     # Build a timestamp for sorting/reporting
@@ -319,7 +292,7 @@ def create_entry():
 
     entry_path = f"{user_prefix(user_id)}ledger/entries/{entry['id'].replace(':','-')}.json"
     store.write_json(entry_path, entry)
-    _append_index(user_id, entry)
+    append_index(user_id, entry)
 
     snap_ts = entry["id"].replace(":", "-")
     store.write_json(f"{user_prefix(user_id)}snapshots/{snap_ts}.json", updated)

@@ -8,7 +8,7 @@ from typing import Any, Optional, Tuple
 from google.cloud import storage
 from google.api_core.exceptions import NotFound, Forbidden
 from functools import wraps
-from flask import session, redirect, url_for
+from flask import session, redirect, url_for, current_app
 import os
 import requests
 import datetime as dt
@@ -285,3 +285,29 @@ def window_from_strings(q_start: str, q_end: str
         except Exception:
             pass
     return month_window(fallback_today)
+
+def append_index(user_id: str, entry: dict):
+    store = current_app.gcs
+    idx_path = f"{user_prefix(user_id)}ledger/index.json"
+    idx = store.read_json(idx_path) or []
+    idx.append({
+        "id": entry.get("id"),
+        "ts": entry.get("ts"),
+        "kind": entry.get("kind"),
+        "amount": entry.get("amount"),
+        "from_account": entry.get("from_account"),
+        "to_account": entry.get("to_account"),
+        "debt_name": entry.get("debt_name"),
+        "category": entry.get("category"),
+        "note": entry.get("note"),
+        # balance display helpers
+        "balance_kind": entry.get("balance_kind"),
+        "balance_name": entry.get("balance_name"),
+        "balance_after": entry.get("balance_after"),
+        "balance_name_from": entry.get("balance_name_from"),
+        "balance_after_from": entry.get("balance_after_from"),
+        "balance_name_to": entry.get("balance_name_to"),
+        "balance_after_to": entry.get("balance_after_to"),
+        "account_after": entry.get("account_after"),
+    })
+    store.write_json(idx_path, idx)
