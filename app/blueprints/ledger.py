@@ -186,6 +186,8 @@ def list_entries():
 
     # list view table
     index = _entries(store, user_id)
+    print(index)
+    print(type(index))
     index = sorted(index, key=lambda x: x.get("ts", ""), reverse=True)[:100]
 
     # legacy "period" still supported for your existing stats renderer
