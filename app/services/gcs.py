@@ -20,45 +20,16 @@ class GcsStore:
             return None
         return blob.download_as_text()
 
-    def write_text(self, path, text, content_type="text/plain"):
+    def write_text(self, path: str, text: str, content_type: str = "text/plain") -> None:
         blob = self.bucket.blob(path)
-        # Try library-level retry first
-        try:
-            blob.upload_from_string(text, content_type=content_type, retry=TRANSIENT_RETRY, timeout=60)
-            return
-        except TypeError:
-            # older libs may not support 'retry' param on this call; fall through
-            pass
-
-        # Fallback: manual backoff for 429
-        backoff = 0.5
-        for attempt in range(6):
-            try:
-                blob.upload_from_string(text, content_type=content_type, timeout=60)
-                return
-            except TooManyRequests:
-                if attempt == 5:
-                    raise
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 8.0)
+        blob.upload_from_string(text, content_type=content_type)
 
     def read_json(self, path: str):
         t = self.read_text(path)
         return None if t is None else json.loads(t)
 
-    def write_json(self, path, obj):
-        # compact ‘None’ delete-compat; avoid huge payloads often
-        if obj is None:
-            # prefer real delete if possible
-            if hasattr(self, "delete"):
-                try:
-                    return self.delete(path)
-                except Exception:
-                    pass
-            text = "null"
-        else:
-            text = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
-        self.write_text(path, text, "application/json")
+    def write_json(self, path: str, obj) -> None:
+        self.write_text(path, json.dumps(obj, ensure_ascii=False, indent=2), "application/json")
 
     def list_paths(self, prefix: str) -> List[str]:
         return [b.name for b in self.client.list_blobs(self.bucket, prefix=prefix)]
