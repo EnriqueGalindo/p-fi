@@ -98,6 +98,7 @@ def overview():
     available = max(0.0, cash_now - monthly_required - ef_now)
 
     accounts_rows = []
+    total_accounts_balance = 0.0
     for a in latest.get("accounts", []) or []:
         bal = _to_float(a.get("balance"))
         accounts_rows.append({
@@ -105,6 +106,7 @@ def overview():
             "balance": round(bal, 2),
             "type": (a.get("type") or ""),
         })
+        total_accounts_balance += bal
 
     # debts sorted by APR, with months to payoff using min payments
     debts_rows = []
@@ -149,6 +151,7 @@ def overview():
     return render_template(
         "overview.html",
         accounts=accounts_rows,
+        accounts_total=round(total_accounts_balance, 2),
         summary=summary,
         debts=debts_rows,
         costs=cost_rows,
