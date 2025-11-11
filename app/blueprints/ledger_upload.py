@@ -100,7 +100,7 @@ def upload_ledger_csv():
         return redirect(url_for("ledger_upload.upload_form"))
 
     # load current index
-    idx_path = f"{pref}ledger/review/index.json"
+    idx_path = f"{pref}ledger/index.json"
     index: List[dict] = store.read_json(idx_path) or []
 
     # build fast duplicate set from existing index
