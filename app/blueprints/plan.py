@@ -101,11 +101,12 @@ def overview():
     total_accounts_balance = 0.0
     for a in latest.get("accounts", []) or []:
         bal = _to_float(a.get("balance"))
-        accounts_rows.append({
-            "name":  a.get("name") or "",
-            "balance": round(bal, 2),
-            "type": (a.get("type") or ""),
-        })
+        if a.get("name"):
+            accounts_rows.append({
+                "name":  a.get("name") or "",
+                "balance": round(bal, 2),
+                "type": (a.get("type") or ""),
+            })
         total_accounts_balance += bal
     accounts_rows.sort(key=lambda x: (x["balance"] or 0), reverse=True)
 
