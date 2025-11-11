@@ -135,6 +135,7 @@ def upload_ledger_csv():
         # duplicate check
         key = _existing_key(ts_iso, amt)
         print(f"Checking key: {key}")
+        print(f"Existing keys: {existing}")
         if key in existing:
             skipped_dup += 1
             continue
