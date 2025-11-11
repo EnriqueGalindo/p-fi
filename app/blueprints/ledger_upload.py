@@ -100,12 +100,14 @@ def upload_ledger_csv():
         return redirect(url_for("ledger_upload.upload_form"))
 
     # load current index
-    idx_path = f"{pref}ledger/index.json"
+    idx_path = f"{pref}ledger/review/index.json"
+    idx_path_comp = f"{pref}ledger/index.json"
+    index_comp: List[dict] = store.read_json(idx_path_comp) or []
     index: List[dict] = store.read_json(idx_path) or []
 
     # build fast duplicate set from existing index
     existing = set()
-    for r in index:
+    for r in index_comp:
         try:
             ts = (r.get("ts") or "")
             amt = round(float(r.get("amount") or 0), 2)
