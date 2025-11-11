@@ -109,6 +109,13 @@
       </tr>
       {% endfor %}
     </tbody>
+    <tfoot>
+      <tr>
+        <th style="text-align:right;">Total</th>
+        <th style="text-align:right;">${{ '%.2f'|format(debts_total) }}</th>
+        <th></th>
+      </tr>
+    </tfoot>
   </table>
 
   <h3 style="margin-top:1rem;">Recurring Costs</h3>
@@ -124,6 +131,13 @@
       </tr>
       {% endfor %}
     </tbody>
+    <tfoot>
+      <tr>
+        <th style="text-align:right;">Total</th>
+        <th style="text-align:right;">${{ '%.2f'|format(debts_total) }}</th>
+        <th></th>
+      </tr>
+    </tfoot>
   </table>
 </div>
 {% endblock %}

@@ -107,9 +107,12 @@ def overview():
             "type": (a.get("type") or ""),
         })
         total_accounts_balance += bal
+    accounts_rows.sort(key=lambda x: (x["balance"] or 0), reverse=True)
+
 
     # debts sorted by APR, with months to payoff using min payments
     debts_rows = []
+    total_debt_balance = 0.0
     for d in debts:
         bal = float(d.get("balance") or 0)
         apr = float(d.get("apr") or 0)
@@ -123,17 +126,19 @@ def overview():
                 "min_payment": round(mp, 2),
                 "months_to_payoff": months,
             })
+            total_debt_balance += bal
     debts_rows.sort(key=lambda x: x["apr"], reverse=True)
 
     # costs (include the new type)
     cost_rows = []
     for c in costs:
-        cost_rows.append({
-            "name": c.get("name") or "",
-            "type": (c.get("type") or ""),
-            "amount_monthly": round(_to_monthly(c.get("amount"), c.get("interval")), 2),
-            "interval": (c.get("interval") or "monthly")
-        })
+        if c.get("amount") > 0:
+            cost_rows.append({
+                "name": c.get("name") or "",
+                "type": (c.get("type") or ""),
+                "amount_monthly": round(_to_monthly(c.get("amount"), c.get("interval")), 2),
+                "interval": (c.get("interval") or "monthly")
+            })
     cost_rows.sort(key=lambda x: (x["type"] or "zzz", -x["amount_monthly"]))
 
     summary = {
@@ -154,7 +159,9 @@ def overview():
         accounts_total=round(total_accounts_balance, 2),
         summary=summary,
         debts=debts_rows,
+        debts_total=round(total_debt_balance, 2),
         costs=cost_rows,
+        costs_total=round(costs_monthly, 2),
         weekly=weekly,
         plan=plan,
     )
