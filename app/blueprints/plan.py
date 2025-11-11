@@ -132,7 +132,7 @@ def overview():
     # costs (include the new type)
     cost_rows = []
     for c in costs:
-        if c.get("amount", -1) > 0:
+        if c.get("amount") and c.get("amount", -1) > 0:
             cost_rows.append({
                 "name": c.get("name") or "",
                 "type": (c.get("type") or ""),
