@@ -341,6 +341,8 @@ def update_accounts_snapshot(
     """
     pref = user_prefix(user_id)
     latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
+    latest_path = f"{pref}latest.json"
+
 
     if not latest:
         raise RuntimeError("No latest snapshot found for user")
@@ -392,6 +394,6 @@ def update_accounts_snapshot(
 
     # --- write both snapshot and latest ------------------------------------
     current_app.gcs.write_json(snap_path, snapshot)
-    current_app.gcs.write_json(latest, snapshot)
+    current_app.gcs.write_json(latest_path, snapshot)
 
     return snapshot
