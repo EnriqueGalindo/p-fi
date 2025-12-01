@@ -7,9 +7,7 @@
   <input type="number" step="0.01" name="balance" placeholder="Balance" required>
   <select name="type" required>
     {% for t in account_types %}
-        <option value="{{ t }}" {% if acct.type == t %}selected{% endif %}>
-        {{ t }}
-        </option>
+       <option value="{{ t }}">{{ t }}</option>
     {% endfor %}
   </select>
 </form>
