@@ -46,6 +46,7 @@ def create_app():
 
     # shared store
     app.gcs = GcsStore(app.config["GCS_BUCKET"])
+    app.config_store = GcsStore(app.config["SYS_ADMIN_BUCKET"])
 
     # register blueprints
     from .blueprints.onboarding import bp as onboarding_bp
