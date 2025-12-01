@@ -5,6 +5,8 @@ from ..logic.weekly_budget import build_weekly_budget
 from ..services.utils import current_user_identity, get_json_from_gcs, user_prefix
 from math import ceil, log
 from flask import session, redirect, url_for
+from app.services.utils import get_valid_types
+
 
 STEPS_CFG_PATH = "config/plan_steps.json"
 CASH_TYPES = {"cash","checking","savings"}
@@ -254,7 +256,13 @@ def edit_accounts():
     latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
     accounts = latest.get("accounts", [])
 
-    return render_template("plan/edit_accounts.html", accounts=accounts)
+    account_types = get_valid_types("account")
+
+    return render_template(
+        "plan/edit_accounts.html",
+        accounts=accounts,
+        account_types=account_types,
+    )
 
 @bp.post("/plan/accounts/<int:index>/update")
 def update_account(index: int):

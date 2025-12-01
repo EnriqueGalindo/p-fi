@@ -25,6 +25,9 @@ def create_app():
     app.config["GCS_BUCKET"] = os.environ["GCS_BUCKET"]
     app.config["USER_ID"]    = os.environ.get("USER_ID", "default")
 
+    app.config["SYS_ADMIN_BUCKET"] = os.environ.get("SYS_ADMIN_BUCKET", "gmoney_sys_admin")
+    app.config["TYPE_CONFIG_PATH"] = os.environ.get("TYPE_CONFIG_PATH", "type_config.json")
+
     app.config["AUTH_DISABLED"] = os.getenv("AUTH_DISABLED", "").lower() in ("1", "true", "yes")
     app.config["DEV_EMAIL"] = os.getenv("DEV_EMAIL", "dev@gmoney.me")
 

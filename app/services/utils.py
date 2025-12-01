@@ -309,3 +309,21 @@ def normalize_entry(user_id: str, entry: dict):
         "account_after": entry.get("account_after"),
     }
     return idx_path, d_entry
+
+def get_valid_types(category: str) -> list[str]:
+    """
+    Read type_config.json from the sys-admin bucket and return the
+    valid_types list for the given category ('account', 'debt', 'costs').
+
+    Example:
+        get_valid_types("account")  -> ["cash", "checking", "savings", ...]
+    """
+
+    # Load the config from the admin bucket
+    cfg_path = current_app.config["TYPE_CONFIG_PATH"]
+    admin_store = current_app.config_store   # created in __init__.py
+    cfg = admin_store.read_json(cfg_path) or {}
+
+    # Guard against missing sections
+    section = cfg.get(category, {})
+    return section.get("valid_types", [])
