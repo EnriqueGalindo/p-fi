@@ -326,4 +326,5 @@ def get_valid_types(category: str) -> list[str]:
 
     # Guard against missing sections
     section = cfg.get(category, {})
+    print(section)
     return section.get("valid_types", [])
