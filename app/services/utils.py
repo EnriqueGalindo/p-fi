@@ -312,19 +312,25 @@ def normalize_entry(user_id: str, entry: dict):
 
 def get_valid_types(category: str) -> list[str]:
     """
-    Read type_config.json from the sys-admin bucket and return the
-    valid_types list for the given category ('account', 'debt', 'costs').
+    Return the valid_types list for a category in type_config.json.
 
-    Example:
-        get_valid_types("account")  -> ["cash", "checking", "savings", ...]
+    category: "account", "debt", or "costs".
     """
+    cfg_path = current_app.config["TYPE_CONFIG_PATH"]      # e.g. "type_config.json"
+    store = current_app.config_store                       # GcsStore for gmoneysys_admin
 
-    # Load the config from the admin bucket
-    cfg_path = current_app.config["TYPE_CONFIG_PATH"]
-    admin_store = current_app.config_store   # created in __init__.py
-    cfg = admin_store.read_json(cfg_path) or {}
+    cfg = store.read_json(cfg_path)
 
-    # Guard against missing sections
-    section = cfg.get(category, {})
-    print(section)
-    return section.get("valid_types", [])
+    if not cfg:
+        # Fail loudly so we don't silently get an empty dropdown
+        raise RuntimeError(f"type_config.json not found or empty at {cfg_path}")
+
+    section = cfg.get(category)
+    if not section:
+        raise RuntimeError(f"Category {category!r} missing in type_config.json")
+
+    types = section.get("valid_types", [])
+    if not types:
+        raise RuntimeError(f"No valid_types defined for {category!r} in type_config.json")
+
+    return types
