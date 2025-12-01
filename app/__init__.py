@@ -22,7 +22,6 @@ def create_app():
         # PERMANENT_SESSION_LIFETIME=60*60*24*30,  # 30 days
     )
 
-    # --- Your existing env/config ---
     app.config["GCS_BUCKET"] = os.environ["GCS_BUCKET"]
     app.config["USER_ID"]    = os.environ.get("USER_ID", "default")
 

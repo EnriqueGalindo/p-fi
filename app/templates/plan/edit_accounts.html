@@ -1,0 +1,87 @@
+<h1>Edit Accounts</h1>
+
+<!-- Add new account (plus at top) -->
+<form method="post" action="{{ url_for('plan.add_account') }}" class="add-account-form">
+  <button type="submit" title="Add account">➕</button>
+  <input type="text" name="name" placeholder="Name" required>
+  <input type="number" step="0.01" name="balance" placeholder="Balance" required>
+  <select name="type" required>
+    <option value="checking">checking</option>
+    <option value="savings">savings</option>
+    <option value="cash">cash</option>
+  </select>
+</form>
+
+<table class="accounts-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Balance</th>
+      <th>Type</th>
+      <th>Save</th>
+      <th>Delete</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for acct in accounts %}
+    <tr data-row="{{ loop.index0 }}">
+      <!-- update form: one per row -->
+      <form method="post"
+            action="{{ url_for('plan.update_account', index=loop.index0) }}">
+        <td>
+          <input type="text" name="name" value="{{ acct.name }}" readonly>
+        </td>
+        <td>
+          <input type="number" step="0.01" name="balance"
+                 value="{{ '%.2f'|format(acct.balance or 0) }}">
+        </td>
+        <td>
+          <select name="type">
+            <option value="checking" {{ 'selected' if acct.type == 'checking' }}>checking</option>
+            <option value="savings"  {{ 'selected' if acct.type == 'savings' }}>savings</option>
+            <option value="cash"     {{ 'selected' if acct.type == 'cash' }}>cash</option>
+          </select>
+        </td>
+        <td>
+          <!-- green check: hidden until inputs change -->
+          <button type="submit"
+                  class="save-btn hidden"
+                  title="Save">
+            ✅
+          </button>
+        </td>
+        <!-- delete form with trash icon -->
+      </form>
+      <td>
+        <form method="post"
+              action="{{ url_for('plan.delete_account', index=loop.index0) }}">
+          <input type="hidden" name="name" value="{{ acct.name }}">
+          <input type="hidden" name="type" value="{{ acct.type }}">
+          <button type="submit" class="trash-btn" title="Delete">
+            🗑
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<a href="{{ url_for('plan.overview') }}">Back to overview</a>
+
+<script>
+// Show green check when row has been edited
+document.querySelectorAll("tr[data-row]").forEach(row => {
+  const saveBtn = row.querySelector(".save-btn");
+  row.querySelectorAll("input, select").forEach(input => {
+    input.addEventListener("input", () => {
+      saveBtn.classList.remove("hidden");
+    });
+  });
+});
+</script>
+
+<style>
+.hidden { display: none; }
+/* add whatever styling you like for table, buttons, etc. */
+</style>

@@ -1,10 +1,9 @@
 # app/blueprints/plan.py
 from flask import Blueprint, current_app, jsonify, redirect, render_template, url_for, request
-from ..logic.plan_engine import compute_plan, simulate_debt_payoff
+from ..logic.plan_engine import compute_plan, simulate_debt_payoff, MONTH_FACTORS, update_accounts_snapshot
+from ..logic.weekly_budget import build_weekly_budget
 from ..services.utils import current_user_identity, get_json_from_gcs, user_prefix
 from math import ceil, log
-from ..logic.plan_engine import MONTH_FACTORS  # reuse factors
-from ..logic.weekly_budget import build_weekly_budget
 from flask import session, redirect, url_for
 
 STEPS_CFG_PATH = "config/plan_steps.json"
@@ -75,7 +74,7 @@ def overview():
     groceries     = 400 * hh
     monthly_required = costs_monthly + min_payments + groceries
 
-    # plan (unchanged)
+    # plan
     from ..logic.plan_engine import compute_plan
     plan = compute_plan(latest)
 
@@ -151,7 +150,6 @@ def overview():
         "current_step": plan["current_step"],
     }
 
-    # NEW: weekly roll-up (costs by type, debt mins, routing of leftover)
     weekly = build_weekly_budget(latest, plan)
 
     return render_template(
@@ -248,3 +246,73 @@ def view_plan():
                            step_copy=step_copy,
                            strategy=strategy,
                            payoff=payoff)
+
+@bp.get("/plan/accounts")
+def edit_accounts():
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
+    accounts = latest.get("accounts", [])
+
+    return render_template("plan/edit_accounts.html", accounts=accounts)
+
+@bp.post("/plan/accounts/<int:index>/update")
+def update_account(index: int):
+    _, user_id = current_user_identity()
+
+    name = request.form["name"].strip()
+    acct_type = request.form["type"].strip()
+    balance_raw = request.form["balance"].strip()
+
+    # normalize balance
+    balance = float(balance_raw or 0.0)
+
+    update_accounts_snapshot(
+        user_id,
+        action="update",
+        target_name=name,
+        target_type=acct_type,
+        changes={"balance": balance},
+    )
+
+    return redirect(url_for("plan.edit_accounts"))
+
+@bp.post("/plan/accounts/<int:index>/delete")
+def delete_account(index: int):
+    _, user_id = current_user_identity()
+
+    name = request.form["name"].strip()
+    acct_type = request.form["type"].strip()
+
+    update_accounts_snapshot(
+        user_id,
+        action="delete",
+        target_name=name,
+        target_type=acct_type,
+    )
+
+    return redirect(url_for("plan.edit_accounts"))
+
+@bp.post("/plan/accounts/add")
+def add_account():
+    _, user_id = current_user_identity()
+
+    name = request.form["name"].strip()
+    acct_type = request.form["type"].strip()
+    balance_raw = request.form["balance"].strip()
+    balance = float(balance_raw or 0.0)
+
+    new_account = {
+        "name": name,
+        "type": acct_type,
+        "balance": balance,
+    }
+
+    update_accounts_snapshot(
+        user_id,
+        action="add",
+        new_account=new_account,
+    )
+
+    return redirect(url_for("plan.edit_accounts"))
+

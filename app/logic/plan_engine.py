@@ -322,3 +322,76 @@ def compute_plan(snapshot: dict):
         "current_step": current,
         "steps": steps
     }
+
+
+def update_accounts_snapshot(
+    user_id: str,
+    *,
+    action: str,                 # "add", "update", or "delete"
+    target_name: str | None = None,
+    target_type: str | None = None,
+    changes: dict | None = None,     # for "update"
+    new_account: dict | None = None  # for "add"
+):
+    """
+    Load latest.json, apply an account mutation, then write a new snapshot
+    and update latest.json.
+
+    Matching is based on (name, type) for update/delete.
+    """
+    pref = user_prefix(user_id)
+    latest = current_app.gcs.read_json(f"{pref}latest.json") or {}
+
+    if not latest:
+        raise RuntimeError("No latest snapshot found for user")
+
+    accounts = latest.get("accounts", [])
+
+    # --- perform the requested action on accounts ---------------------------
+
+    def _matches(acct: dict) -> bool:
+        return acct.get("name") == target_name and acct.get("type") == target_type
+
+    if action == "update":
+        if changes is None:
+            changes = {}
+        for acct in accounts:
+            if _matches(acct):
+                acct.update(changes)
+                break
+        else:
+            raise ValueError(f"Account {target_name!r} ({target_type}) not found")
+
+    elif action == "delete":
+        accounts = [acct for acct in accounts if not _matches(acct)]
+
+    elif action == "add":
+        if not new_account:
+            raise ValueError("new_account is required for action='add'")
+        # you can normalize / validate here if you want
+        accounts.append(new_account)
+
+    else:
+        raise ValueError(f"Unknown action: {action}")
+
+    latest["accounts"] = accounts
+
+    # --- create a new snapshot object --------------------------------------
+
+    snapshot_at = dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+    # keep everything from latest, just bump snapshot_at (and version if you want)
+    snapshot = {
+        **latest,
+        "snapshot_at": snapshot_at,
+        "version": latest.get("version", 1),
+    }
+
+    ts = snapshot_at.replace(":", "-")
+    snap_path = f"{pref}snapshots/{ts}.json"
+
+    # --- write both snapshot and latest ------------------------------------
+    current_app.gcs.write_json(snap_path, snapshot)
+    current_app.gcs.write_json(latest, snapshot)
+
+    return snapshot
