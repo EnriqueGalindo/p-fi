@@ -37,9 +37,11 @@
         </td>
         <td>
           <select name="type">
-            <option value="checking" {{ 'selected' if acct.type == 'checking' }}>checking</option>
-            <option value="savings"  {{ 'selected' if acct.type == 'savings' }}>savings</option>
-            <option value="cash"     {{ 'selected' if acct.type == 'cash' }}>cash</option>
+            {% for t in account_types %}
+                <option value="{{ t }}" {% if acct.type == t %}selected{% endif %}>
+                {{ t }}
+                </option>
+            {% endfor %}
           </select>
         </td>
         <td>
