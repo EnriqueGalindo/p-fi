@@ -61,10 +61,13 @@
     {% endif %}
     </div>
 
-<h3>Accounts</h3>
-<a href="{{ url_for('plan.edit_accounts') }}" class="icon-button">
-  ✏️
-</a>
+<h3>
+  Accounts
+  <a href="{{ url_for('plan.edit_accounts') }}" class="icon-button">
+    ✏️
+  </a>
+</h3>
+
 <table>
   <thead><tr><th>Name</th><th>Balance</th><th>Type</th></tr></thead>
   <tbody>
