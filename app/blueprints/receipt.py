@@ -1,7 +1,7 @@
 # app/blueprints/receipts.py
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 
-from logic import receipt  # where your send_email lives too
+from ..logic import receipt  # where your send_email lives too
 
 bp = Blueprint("receipts", __name__, url_prefix="/receipts")
 
