@@ -1,0 +1,70 @@
+<!-- app/templates/receipts/rent_receipt.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Rent Receipt</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #000; }
+    .receipt { max-width: 720px; margin: auto; border: 1px solid #000; padding: 30px; }
+    h1 { text-align: center; margin-bottom: 24px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .label { font-weight: bold; }
+    .muted { color: #222; }
+    .full { grid-column: 1 / -1; }
+    .money { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="receipt">
+    <h1>Rent Receipt</h1>
+
+    <div class="grid">
+      <div>
+        <div class="label">Renter Name</div>
+        <div class="muted">{{ renter_first }} {{ renter_last }}</div>
+      </div>
+
+      <div>
+        <div class="label">Renter Email</div>
+        <div class="muted">{{ renter_email }}</div>
+      </div>
+
+      <div class="full">
+        <div class="label">Rental Address</div>
+        <div class="muted">{{ rental_address }}</div>
+      </div>
+
+      <div>
+        <div class="label">Date Paid</div>
+        <div class="muted">{{ date_paid }}</div>
+      </div>
+
+      <div>
+        <div class="label">Month Covered</div>
+        <div class="muted">{{ month_covered }}</div>
+      </div>
+
+      <div>
+        <div class="label">Amount Paid</div>
+        <div class="muted money">{{ amount_paid }}</div>
+      </div>
+
+      <div>
+        <div class="label">Payment Status</div>
+        <div class="muted">{{ payment_status }}</div>
+      </div>
+
+      <div>
+        <div class="label">Payment Method</div>
+        <div class="muted">{{ payment_method }}</div>
+      </div>
+
+      <div class="full">
+        <div class="label">Check Number</div>
+        <div class="muted">{{ check_number or "—" }}</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

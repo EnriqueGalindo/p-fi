@@ -20,6 +20,8 @@
       <a href="/overview">Home</a>
       <a href="/plan">Plan</a>
       <a href="/ledger">Ledger</a>
+      <a href="{{ url_for('receipt.new_rent_receipt') }}">Receipts</a>
+
     </nav>
     {% block content %}{% endblock %}
   </body>

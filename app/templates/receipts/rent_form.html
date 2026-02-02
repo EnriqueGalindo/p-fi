@@ -1,0 +1,79 @@
+{# app/templates/receipts/rent_form.html #}
+{% extends "base.html" %}
+{% block content %}
+<h2>Send Rent Receipt</h2>
+
+<form method="POST" style="max-width: 820px;">
+  <h3>Tenant</h3>
+  <div>
+    <label>First Name</label><br>
+    <input name="renter_first" value="{{ form.get('renter_first','') }}" required>
+  </div>
+  <div>
+    <label>Last Name</label><br>
+    <input name="renter_last" value="{{ form.get('renter_last','') }}" required>
+  </div>
+  <div>
+    <label>Email</label><br>
+    <input name="renter_email" type="email" value="{{ form.get('renter_email','') }}" required>
+  </div>
+
+  <hr>
+
+  <h3>Receipt Details</h3>
+  <div>
+    <label>Rental Address</label><br>
+    <textarea name="rental_address" rows="3" required>{{ form.get('rental_address','') }}</textarea>
+  </div>
+
+  <div>
+    <label>Date Paid</label><br>
+    <input name="date_paid" type="date" value="{{ form.get('date_paid','') }}" required>
+  </div>
+
+  <div>
+    <label>Month Covered (e.g., February 2026)</label><br>
+    <input name="month_covered" value="{{ form.get('month_covered','') }}" required>
+  </div>
+
+  <div>
+    <label>Amount Paid</label><br>
+    <input name="amount_paid" value="{{ form.get('amount_paid','') }}" placeholder="1250 or 1250.00" required>
+  </div>
+
+  <div>
+    <label>Payment Status</label><br>
+    <select name="payment_status" required>
+      {% set ps = (form.get('payment_status','Paid in full')) %}
+      <option value="Paid in full" {{ "selected" if ps=="Paid in full" else "" }}>Paid in full</option>
+      <option value="Partial payment" {{ "selected" if ps=="Partial payment" else "" }}>Partial payment</option>
+      <option value="Overpayment / credit" {{ "selected" if ps=="Overpayment / credit" else "" }}>Overpayment / credit</option>
+      <option value="Late fee included" {{ "selected" if ps=="Late fee included" else "" }}>Late fee included</option>
+      <option value="NSF / returned" {{ "selected" if ps=="NSF / returned" else "" }}>NSF / returned</option>
+    </select>
+  </div>
+
+  <div>
+    <label>Payment Method</label><br>
+    {% set pm = (form.get('payment_method','')) %}
+    <select name="payment_method" required>
+      <option value="" {{ "selected" if pm=="" else "" }}>-- select --</option>
+      <option value="Check" {{ "selected" if pm=="Check" else "" }}>Check</option>
+      <option value="Cash" {{ "selected" if pm=="Cash" else "" }}>Cash</option>
+      <option value="Zelle" {{ "selected" if pm=="Zelle" else "" }}>Zelle</option>
+      <option value="Venmo" {{ "selected" if pm=="Venmo" else "" }}>Venmo</option>
+      <option value="Bank Transfer" {{ "selected" if pm=="Bank Transfer" else "" }}>Bank Transfer</option>
+      <option value="Other" {{ "selected" if pm=="Other" else "" }}>Other</option>
+    </select>
+  </div>
+
+  <div>
+    <label>Check Number (only if Check)</label><br>
+    <input name="check_number" value="{{ form.get('check_number','') }}">
+  </div>
+
+  <div style="margin-top: 18px;">
+    <button type="submit">Send Receipt</button>
+  </div>
+</form>
+{% endblock %}
