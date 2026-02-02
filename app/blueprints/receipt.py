@@ -1,4 +1,4 @@
-# app/blueprints/receipts.py
+# app/blueprints/receipt.py
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 
 from ..logic import receipt  # where your send_email lives too
@@ -69,7 +69,7 @@ def new_rent_receipt():
             return render_template("receipts/rent_form.html", form=request.form)
 
         flash("Receipt sent (tenant + records copy).", "success")
-        return redirect(url_for("receipts.new_rent_receipt"))
+        return redirect(url_for("receipt.new_rent_receipt"))
 
     # GET
-    return render_template("receipts/rent_form.html", form={})
+    return render_template("receipt/rent_form.html", form={})
