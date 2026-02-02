@@ -1,7 +1,7 @@
 # app/blueprints/receipts.py
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 
-from app.services.utils import send_rent_receipt  # where your send_email lives too
+from logic import receipt  # where your send_email lives too
 
 bp = Blueprint("receipts", __name__, url_prefix="/receipts")
 
@@ -51,7 +51,7 @@ def new_rent_receipt():
                 form=request.form,
             )
 
-        ok, err = send_rent_receipt(
+        ok, err = receipt.send_rent_receipt(
             renter_first=renter_first,
             renter_last=renter_last,
             renter_email=renter_email,
