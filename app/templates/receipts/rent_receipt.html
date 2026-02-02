@@ -4,67 +4,111 @@
 <head>
   <meta charset="UTF-8">
   <title>Rent Receipt</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 40px; color: #000; }
-    .receipt { max-width: 720px; margin: auto; border: 1px solid #000; padding: 30px; }
-    h1 { text-align: center; margin-bottom: 24px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .label { font-weight: bold; }
-    .muted { color: #222; }
-    .full { grid-column: 1 / -1; }
+    /* Keep styles simple + email-client-friendly */
+    body { margin: 0; padding: 0; background: #ffffff; color: #000000; font-family: Arial, sans-serif; }
+    .container { width: 100%; border-collapse: collapse; }
+    .outer { padding: 24px; }
+    .box { border: 2px solid #000; border-collapse: collapse; background: #fff; width: 720px; max-width: 720px; }
+    .pad { padding: 30px 30px 50px 30px; } /* extra bottom padding prevents border clipping */
+    h1 { margin: 0 0 24px 0; text-align: center; font-size: 44px; line-height: 1.1; font-weight: 800; }
+
+    .label { font-weight: 700; font-size: 20px; margin: 0 0 6px 0; }
+    .value { font-size: 20px; margin: 0; color: #222; }
     .money { font-variant-numeric: tabular-nums; }
+
+    .spacer-row td { height: 18px; line-height: 18px; font-size: 0; }
+
+    /* Make it behave well on narrow screens */
+    @media (max-width: 760px) {
+      .outer { padding: 12px !important; }
+      .box { width: 100% !important; max-width: 100% !important; }
+      .pad { padding: 18px 18px 36px 18px !important; }
+      h1 { font-size: 34px !important; }
+      .label, .value { font-size: 18px !important; }
+    }
   </style>
 </head>
+
 <body>
-  <div class="receipt">
-    <h1>Rent Receipt</h1>
+  <!-- Outer wrapper (email-safe) -->
+  <table role="presentation" class="container" cellpadding="0" cellspacing="0" width="100%">
+    <tr>
+      <td align="center" class="outer">
+        <!-- Bordered box (email-safe) -->
+        <table role="presentation" class="box" cellpadding="0" cellspacing="0" width="720">
+          <tr>
+            <td class="pad">
+              <h1>Rent Receipt</h1>
 
-    <div class="grid">
-      <div>
-        <div class="label">Renter Name</div>
-        <div class="muted">{{ renter_first }} {{ renter_last }}</div>
-      </div>
+              <!-- Two-column layout using tables (more reliable than CSS grid in email clients) -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                <tr>
+                  <td valign="top" width="50%" style="padding-right:12px;">
+                    <div class="label">Renter Name</div>
+                    <div class="value">{{ renter_first }} {{ renter_last }}</div>
+                  </td>
+                  <td valign="top" width="50%" style="padding-left:12px;">
+                    <div class="label">Renter Email</div>
+                    <div class="value">{{ renter_email }}</div>
+                  </td>
+                </tr>
 
-      <div>
-        <div class="label">Renter Email</div>
-        <div class="muted">{{ renter_email }}</div>
-      </div>
+                <tr class="spacer-row"><td colspan="2">&nbsp;</td></tr>
 
-      <div class="full">
-        <div class="label">Rental Address</div>
-        <div class="muted">{{ rental_address }}</div>
-      </div>
+                <tr>
+                  <td colspan="2" valign="top">
+                    <div class="label">Rental Address</div>
+                    <div class="value">{{ rental_address }}</div>
+                  </td>
+                </tr>
 
-      <div>
-        <div class="label">Date Paid</div>
-        <div class="muted">{{ date_paid }}</div>
-      </div>
+                <tr class="spacer-row"><td colspan="2">&nbsp;</td></tr>
 
-      <div>
-        <div class="label">Month Covered</div>
-        <div class="muted">{{ month_covered }}</div>
-      </div>
+                <tr>
+                  <td valign="top" width="50%" style="padding-right:12px;">
+                    <div class="label">Date Paid</div>
+                    <div class="value">{{ date_paid }}</div>
+                  </td>
+                  <td valign="top" width="50%" style="padding-left:12px;">
+                    <div class="label">Month Covered</div>
+                    <div class="value">{{ month_covered }}</div>
+                  </td>
+                </tr>
 
-      <div>
-        <div class="label">Amount Paid</div>
-        <div class="muted money">{{ amount_paid }}</div>
-      </div>
+                <tr class="spacer-row"><td colspan="2">&nbsp;</td></tr>
 
-      <div>
-        <div class="label">Payment Status</div>
-        <div class="muted">{{ payment_status }}</div>
-      </div>
+                <tr>
+                  <td valign="top" width="50%" style="padding-right:12px;">
+                    <div class="label">Amount Paid</div>
+                    <div class="value money">{{ amount_paid }}</div>
+                  </td>
+                  <td valign="top" width="50%" style="padding-left:12px;">
+                    <div class="label">Payment Status</div>
+                    <div class="value">{{ payment_status }}</div>
+                  </td>
+                </tr>
 
-      <div>
-        <div class="label">Payment Method</div>
-        <div class="muted">{{ payment_method }}</div>
-      </div>
+                <tr class="spacer-row"><td colspan="2">&nbsp;</td></tr>
 
-      <div class="full">
-        <div class="label">Check Number</div>
-        <div class="muted">{{ check_number or "—" }}</div>
-      </div>
-    </div>
-  </div>
+                <tr>
+                  <td valign="top" width="50%" style="padding-right:12px;">
+                    <div class="label">Payment Method</div>
+                    <div class="value">{{ payment_method }}</div>
+                  </td>
+                  <td valign="top" width="50%" style="padding-left:12px;">
+                    <div class="label">Check Number</div>
+                    <div class="value">{{ check_number or "—" }}</div>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
