@@ -116,11 +116,12 @@ def send_login_link(to_email: str, token: str, mode: str = "tenant") -> bool:
         text=text,
         html=html,
         from_addr=MAIL_FROM,
-        tags=["magic-link", "login", f"mode:{mode}"],
+        tags=["magic-link", "login", f"mode-{mode}"],  # ✅ dash instead of colon
     )
     if not ok:
         raise RuntimeError(err or "Failed to send email")
     return True
+
 
 
 # =============================================================================
