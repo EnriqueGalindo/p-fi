@@ -25,6 +25,32 @@ from ..services.utils import current_user_identity, user_prefix
 
 bp = Blueprint("rental_admin", __name__, url_prefix="/rental-admin")
 
+import datetime as dt
+
+def _month_range(start_date: str, end_date: str) -> list[str]:
+    """
+    Inclusive month range from start_date to end_date.
+    start_date/end_date are YYYY-MM-DD.
+    Returns ["YYYY-MM", ...]
+    """
+    s = dt.date.fromisoformat(start_date)
+    e = dt.date.fromisoformat(end_date)
+
+    # normalize to first of month
+    cur = dt.date(s.year, s.month, 1)
+    last = dt.date(e.year, e.month, 1)
+
+    out = []
+    while cur <= last:
+        out.append(f"{cur.year:04d}-{cur.month:02d}")
+        # increment month
+        if cur.month == 12:
+            cur = dt.date(cur.year + 1, 1, 1)
+        else:
+            cur = dt.date(cur.year, cur.month + 1, 1)
+    return out
+
+
 PROPERTIES_PATH = "rentals/properties.json"
 
 
@@ -255,56 +281,92 @@ def tenant_edit(tenant_id: str):
         flash("Tenant not found.", "error")
         return redirect(url_for("rental_admin.tenant_list"))
 
+    # Ensure lease dict exists (so t["lease"]["..."] won't crash)
+    if not isinstance(t.get("lease"), dict):
+        t["lease"] = {}
+
     if request.method == "POST":
         first_name = (request.form.get("first_name") or "").strip()
         last_name  = (request.form.get("last_name") or "").strip()
         property_id = (request.form.get("property_id") or "").strip()
 
-        lease_start = (request.form.get("lease_start") or "").strip()
-        lease_end   = (request.form.get("lease_end") or "").strip()
-
-        # Handle optional file upload
-        file = request.files.get("lease_file")
-        if file and file.filename:
-            content_type = file.content_type or "application/pdf"
-            data = file.read()
-
-            safe_name = file.filename.replace("/", "_")
-            lease_path = f"{_leases_prefix()}{tenant_id}/{safe_name}"
-
-            # Requires a bytes-write method on your GCS store:
-            current_app.gcs.write_bytes(lease_path, data, content_type=content_type)
-
-            t["lease"]["file_path"] = lease_path
-            t["lease"]["file_name"] = safe_name
-            t["lease"]["content_type"] = content_type
-            t["lease"]["uploaded_at"] = int(time.time())
+        lease_start = (request.form.get("lease_start") or "").strip() or None
+        lease_end   = (request.form.get("lease_end") or "").strip() or None
 
         if not first_name or not last_name or not property_id:
             flash("First name, last name, and property are required.", "error")
-            return render_template(
-                "rental_admin/tenant_edit.html",
-                tenant=t,
-                properties=properties,
-            )
+        else:
+            # Update tenant fields
+            t["first_name"] = first_name
+            t["last_name"] = last_name
+            t["property_id"] = property_id
+            t["lease"]["start_date"] = lease_start
+            t["lease"]["end_date"] = lease_end
+            t["updated_at"] = int(time.time())
 
-        t["first_name"] = first_name
-        t["last_name"] = last_name
-        t["property_id"] = property_id
-        t["lease"]["start_date"] = lease_start or None
-        t["lease"]["end_date"] = lease_end or None
-        t["updated_at"] = int(time.time())
+            # Optional lease PDF upload
+            file = request.files.get("lease_file")
+            if file and file.filename:
+                safe_name = file.filename.replace("/", "_")
+                content_type = file.content_type or "application/pdf"
+                data = file.read()
 
-        tenants[tenant_id] = t
-        _save_tenants(tenants)
+                lease_path = f"{_leases_prefix()}{tenant_id}/{safe_name}"
+                current_app.gcs.write_bytes(lease_path, data, content_type=content_type)
 
-        flash("Tenant updated.", "success")
-        return redirect(url_for("rental_admin.tenant_list"))
+                t["lease"]["file_path"] = lease_path
+                t["lease"]["file_name"] = safe_name
+                t["lease"]["content_type"] = content_type
+                t["lease"]["uploaded_at"] = int(time.time())
+
+            tenants[tenant_id] = t
+            _save_tenants(tenants)
+
+            flash("Tenant updated.", "success")
+            # stay on edit page so you can immediately upload receipts / see coverage
+            return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+    # Receipts + Lease Coverage context for GET (and POST errors)
+    all_receipts = _load_receipts() or {}
+
+    tenant_receipts = {
+        rid: r for rid, r in all_receipts.items()
+        if isinstance(r, dict) and r.get("tenant_id") == tenant_id
+    }
+
+    # Sort newest-first by covered_month then date_paid (both strings)
+    tenant_receipts = dict(
+        sorted(
+            tenant_receipts.items(),
+            key=lambda kv: ((kv[1].get("covered_month") or ""), (kv[1].get("date_paid") or "")),
+            reverse=True,
+        )
+    )
+
+    lease = t.get("lease") or {}
+    start = lease.get("start_date")
+    end = lease.get("end_date")
+
+    lease_months = []
+    coverage_map = {}
+
+    if start and end:
+        lease_months = _month_range(start, end)  # expects YYYY-MM-DD strings
+        for _, r in tenant_receipts.items():
+            m = (r.get("covered_month") or "").strip()
+            if not m:
+                continue
+            if (r.get("status") or "") == "NSF / returned":
+                continue
+            coverage_map.setdefault(m, r)
 
     return render_template(
         "rental_admin/tenant_edit.html",
         tenant=t,
         properties=properties,
+        tenant_receipts=tenant_receipts,
+        lease_months=lease_months,
+        coverage_map=coverage_map,
     )
 
 # =========================================================
@@ -397,6 +459,10 @@ def _load_receipts() -> dict:
 
 def _save_receipts(receipts: dict) -> None:
     current_app.gcs.write_json(_receipts_path(), receipts)
+
+# =========================================================
+# Receipt Upload + View + Download
+# =========================================================
 
 @bp.post("/tenants/<tenant_id>/receipts")
 def tenant_receipt_upload(tenant_id: str):
