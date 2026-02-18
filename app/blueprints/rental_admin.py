@@ -196,9 +196,12 @@ def _leases_prefix() -> str:
     pref = user_prefix(user_id)
     return f"{pref}rentals/leases/"  # folder-like prefix
 
-def _load_tenants() -> dict:
+def _load_tenants():
     data = current_app.gcs.read_json(_tenants_path()) or {}
-    return data if isinstance(data, dict) else {}
+    for t in data.values():
+        t.setdefault("email", None)
+        t.setdefault("lease", {})
+    return data
 
 def _save_tenants(tenants: dict) -> None:
     current_app.gcs.write_json(_tenants_path(), tenants)
@@ -215,10 +218,11 @@ def tenant_list():
     if request.method == "POST":
         first_name = (request.form.get("first_name") or "").strip()
         last_name  = (request.form.get("last_name") or "").strip()
+        email = (request.form.get("email") or "").strip()
         property_id = (request.form.get("property_id") or "").strip()
 
         lease_start = (request.form.get("lease_start") or "").strip()  # YYYY-MM-DD
-        lease_end   = (request.form.get("lease_end") or "").strip()
+        lease_end = (request.form.get("lease_end") or "").strip()
 
         missing = []
         if not first_name: missing.append("first_name")
@@ -241,10 +245,11 @@ def tenant_list():
             "tenant_id": tenant_id,
             "first_name": first_name,
             "last_name": last_name,
+            "email": email or None,
             "property_id": property_id,
             "lease": {
-                "start_date": lease_start or None,
-                "end_date": lease_end or None,
+                "start_date": None,
+                "end_date": None,
                 "file_path": None,
                 "file_name": None,
                 "content_type": None,
@@ -294,18 +299,27 @@ def tenant_edit(tenant_id: str):
 
     if request.method == "POST":
         first_name = (request.form.get("first_name") or "").strip()
-        last_name  = (request.form.get("last_name") or "").strip()
+        last_name = (request.form.get("last_name") or "").strip()
+        email = (request.form.get("email") or "").strip()
         property_id = (request.form.get("property_id") or "").strip()
 
-        lease_start = (request.form.get("lease_start") or "").strip() or None
-        lease_end   = (request.form.get("lease_end") or "").strip() or None
+        lease_start = (request.form.get("lease_start") or "").strip()
+        lease_end = (request.form.get("lease_end") or "").strip()
+
 
         if not first_name or not last_name or not property_id:
             flash("First name, last name, and property are required.", "error")
+            return render_template(
+                "rental_admin/tenant_edit.html",
+                tenant=t,
+                properties=properties,
+            )
+
         else:
             # Update tenant fields
             t["first_name"] = first_name
             t["last_name"] = last_name
+            t["email"] = email
             t["property_id"] = property_id
             t["lease"]["start_date"] = lease_start
             t["lease"]["end_date"] = lease_end

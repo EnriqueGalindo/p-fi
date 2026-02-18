@@ -19,6 +19,14 @@
     </div>
 
     <div>
+        <label>Email</label><br>
+        <input name="email"
+                type="email"
+                value="{{ tenant.email or '' }}"
+                placeholder="tenant@example.com">
+    </div>
+
+    <div>
       <label>Property</label><br>
       <select name="property_id" required>
         {% for pid, p in properties.items() %}
