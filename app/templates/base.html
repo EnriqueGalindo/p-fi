@@ -3,54 +3,29 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <title>{{ title or "PFI — Rentals" }}</title>
+    <title>{{ title or "PFI" }}</title>
     <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:0;}
-      .card{border:1px solid #e5e7eb;border-radius:12px;padding:1rem 1.25rem;}
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;}
+      .card{border:1px solid #e5e7eb;border-radius:12px;padding:1rem 1.25rem;max-width:960px}
       h1{margin:0 0 .5rem;font-size:1.5rem}
-      table{border-collapse:collapse;width:100%}
-      td,th{border-bottom:1px solid #eee;padding:.4rem .5rem;text-align:left;vertical-align:top}
+      table{border-collapse:collapse}
+      td,th{border-bottom:1px solid #eee;padding:.25rem .5rem;text-align:left}
       .muted{color:#6b7280}
       .ok{color:#16a34a} .warn{color:#d97706} .bad{color:#dc2626}
+      nav a{margin-right:1rem}
       a{text-decoration:none}
       a:hover{text-decoration:underline}
-
-      .layout{display:flex; min-height:100vh;}
-      .sidebar{width:240px; padding:1.25rem; border-right:1px solid #e5e7eb; background:#fafafa;}
-      .sidebar .brand{font-weight:800; margin-bottom:1rem;}
-      .sidebar .section{margin-top:1rem; font-size:.85rem; letter-spacing:.02em; text-transform:uppercase; color:#6b7280;}
-      .sidebar a{display:block; padding:.35rem 0;}
-
-      .content{flex:1; padding:1.5rem 2rem;}
-      .topnav{display:flex; gap:1rem; align-items:center; margin-bottom:1.25rem;}
-      .topnav a{padding:.35rem .5rem; border-radius:8px;}
-      .topnav a.active{background:#111827; color:#fff; text-decoration:none;}
     </style>
   </head>
 
   <body>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="brand">Rental Portal</div>
+    <nav>
+      <a href="/overview">Home</a>
+      <a href="/plan">Plan</a>
+      <a href="/ledger">Ledger</a>
+      <a href="{{ url_for('rental_admin.property_list') }}">Rental Portal</a>
+    </nav>
 
-        <div class="section">Switch</div>
-        <a href="/overview">← Back to Personal Finance</a>
-
-        <div class="section">Admin</div>
-        <a href="{{ url_for('rental_admin.property_list') }}">Properties</a>
-        <a href="{{ url_for('receipts.new_rent_receipt') }}">Receipts</a>
-      </aside>
-
-      <main class="content">
-        <nav class="topnav">
-          <a href="{{ url_for('rental_admin.property_list') }}"
-             class="{{ 'active' if request.endpoint in ('rental_admin.property_list','rental_admin.property_edit') else '' }}">
-            Properties
-          </a>
-        </nav>
-
-        {% block content %}{% endblock %}
-      </main>
-    </div>
+    {% block content %}{% endblock %}
   </body>
 </html>
