@@ -15,6 +15,11 @@
       <input name="last_name" value="{{ form.get('last_name','') }}" required>
     </div>
     <div>
+        <label>Email</label><br>
+        <input name="email" type="email" value="{{ form.get('email','') }}" placeholder="tenant@email.com">
+    </div>
+
+    <div>
       <label>Property</label><br>
       <select name="property_id" required>
         <option value="">-- select --</option>

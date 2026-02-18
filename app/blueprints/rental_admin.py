@@ -218,7 +218,7 @@ def tenant_list():
     if request.method == "POST":
         first_name = (request.form.get("first_name") or "").strip()
         last_name  = (request.form.get("last_name") or "").strip()
-        email = (request.form.get("email") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
         property_id = (request.form.get("property_id") or "").strip()
 
         lease_start = (request.form.get("lease_start") or "").strip()  # YYYY-MM-DD
@@ -248,8 +248,8 @@ def tenant_list():
             "email": email or None,
             "property_id": property_id,
             "lease": {
-                "start_date": None,
-                "end_date": None,
+                "start_date": lease_start or None,
+                "end_date": lease_end or None,
                 "file_path": None,
                 "file_name": None,
                 "content_type": None,
@@ -314,7 +314,7 @@ def tenant_edit(tenant_id: str):
     if request.method == "POST":
         first_name = (request.form.get("first_name") or "").strip()
         last_name = (request.form.get("last_name") or "").strip()
-        email = (request.form.get("email") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
         property_id = (request.form.get("property_id") or "").strip()
 
         lease_start = (request.form.get("lease_start") or "").strip()
