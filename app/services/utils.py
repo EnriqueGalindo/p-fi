@@ -4,14 +4,17 @@ import resend
 import json
 import time
 import logging
+import os
+import requests
+import datetime as dt
+
+from __future__ import annotations
 from typing import Any, Optional, Tuple
 from google.cloud import storage
 from google.api_core.exceptions import NotFound, Forbidden
 from functools import wraps
 from flask import session, redirect, url_for, current_app
-import os
-import requests
-import datetime as dt
+
 
 # very small in-process TTL cache
 _cache: dict[Tuple[str, str], tuple[float, Any]] = {}
@@ -343,11 +346,6 @@ def tenant_email_key(email: str) -> str:
 
 def tenant_directory_path(email: str) -> str:
     return f"rentals/tenant_directory/by_email/{tenant_email_key(email)}.json"
-
-# app/services/utils.py
-from __future__ import annotations
-
-import datetime as dt
 
 def month_label(ym: str) -> str:
     # ym is "YYYY-MM"
