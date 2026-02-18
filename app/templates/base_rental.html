@@ -108,6 +108,16 @@
       <!-- Main content          -->
       <!-- ===================== -->
       <main class="content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul style="margin: 0 0 1rem; padding-left: 1.25rem;">
+            {% for category, msg in messages %}
+                <li class="{{ category }}">{{ msg }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+        {% endwith %}
+
 
         <!-- Rental top nav -->
         <nav class="topnav">
