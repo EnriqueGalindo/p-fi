@@ -343,3 +343,85 @@ def tenant_email_key(email: str) -> str:
 
 def tenant_directory_path(email: str) -> str:
     return f"rentals/tenant_directory/by_email/{tenant_email_key(email)}.json"
+
+# app/services/utils.py
+from __future__ import annotations
+
+import datetime as dt
+
+def month_label(ym: str) -> str:
+    # ym is "YYYY-MM"
+    try:
+        y, m = ym.split("-")
+        d = dt.date(int(y), int(m), 1)
+        return d.strftime("%b %Y")
+    except Exception:
+        return ym
+
+def month_range(start_ymd: str, end_ymd: str) -> list[str]:
+    """
+    Given lease start/end as YYYY-MM-DD strings, return months as ["YYYY-MM", ...]
+    using [start, end) semantics (end month excluded if end is the first of month).
+    Matches the intent of your current _month_range usage.
+    """
+    s = (start_ymd or "").strip()
+    e = (end_ymd or "").strip()
+    if not s or not e:
+        return []
+
+    start = dt.datetime.fromisoformat(s + "T00:00:00").date()
+    end   = dt.datetime.fromisoformat(e + "T00:00:00").date()
+
+    cur = dt.date(start.year, start.month, 1)
+    endm = dt.date(end.year, end.month, 1)
+
+    out = []
+    while cur <= endm:
+        out.append(cur.strftime("%Y-%m"))
+        # add one month
+        y, m = cur.year, cur.month
+        cur = dt.date(y + (m // 12), (m % 12) + 1, 1)
+    return out
+
+def build_coverage_grid(tenant: dict, tenant_receipts: dict) -> tuple[list[str], dict, list[dict]]:
+    """
+    Reproduces the inline logic in rental_admin.tenant_edit:
+      - lease_months
+      - coverage_map (month -> receipt dict)
+      - coverage_grid list used by the template
+    """
+    lease = (tenant or {}).get("lease") or {}
+    start = lease.get("start_date")
+    end   = lease.get("end_date")
+
+    lease_months: list[str] = []
+    coverage_map: dict[str, dict] = {}
+    coverage_grid: list[dict] = []
+
+    if start and end:
+        lease_months = month_range(start, end)
+
+        for _, r in (tenant_receipts or {}).items():
+            if not isinstance(r, dict):
+                continue
+            m = (r.get("covered_month") or "").strip()
+            if not m:
+                continue
+            if (r.get("status") or "") == "NSF / returned":
+                continue
+            coverage_map.setdefault(m, r)
+
+        for ym in lease_months:
+            r = coverage_map.get(ym)
+            paid = bool(r)
+            coverage_grid.append({
+                "ym": ym,
+                "label": month_label(ym),
+                "paid": paid,
+                "status": (r.get("status") if r else "Not paid"),
+                "receipt_id": (r.get("receipt_id") if r else None),
+                "date_paid": (r.get("date_paid") if r else None),
+                "amount": (r.get("amount") if r else None),
+            })
+
+    return lease_months, coverage_map, coverage_grid

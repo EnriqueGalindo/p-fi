@@ -21,42 +21,17 @@ from flask import (
 
 import io
 
-from ..services.utils import current_user_identity, user_prefix, tenant_directory_path, tenant_email_key, parse_ymd
+from ..services.utils import (
+    current_user_identity,
+    user_prefix,
+    tenant_directory_path,
+    build_coverage_grid,
+    parse_ymd
+)
 
 bp = Blueprint("rental_admin", __name__, url_prefix="/rental-admin")
 
 import datetime as dt
-
-def _month_range(start_date: str, end_date: str) -> list[str]:
-    """
-    Inclusive month range from start_date to end_date.
-    start_date/end_date are YYYY-MM-DD.
-    Returns ["YYYY-MM", ...]
-    """
-    s = dt.date.fromisoformat(start_date)
-    e = dt.date.fromisoformat(end_date)
-
-    # normalize to first of month
-    cur = dt.date(s.year, s.month, 1)
-    last = dt.date(e.year, e.month, 1)
-
-    out = []
-    while cur <= last:
-        out.append(f"{cur.year:04d}-{cur.month:02d}")
-        # increment month
-        if cur.month == 12:
-            cur = dt.date(cur.year + 1, 1, 1)
-        else:
-            cur = dt.date(cur.year, cur.month + 1, 1)
-    return out
-
-def _month_label(ym: str) -> str:
-    # ym = "YYYY-MM"
-    y, m = ym.split("-", 1)
-    names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    return f"{names[int(m)-1]} {y}"
-
-
 
 PROPERTIES_PATH = "rentals/properties.json"
 
@@ -419,36 +394,7 @@ def tenant_edit(tenant_id: str):
         )
     )
 
-    lease = t.get("lease") or {}
-    start = lease.get("start_date")
-    end = lease.get("end_date")
-
-    lease_months = []
-    coverage_map = {}
-
-    if start and end:
-        lease_months = _month_range(start, end)  # expects YYYY-MM-DD strings
-        for _, r in tenant_receipts.items():
-            m = (r.get("covered_month") or "").strip()
-            if not m:
-                continue
-            if (r.get("status") or "") == "NSF / returned":
-                continue
-            coverage_map.setdefault(m, r)
-    
-    coverage_grid = []
-    for ym in lease_months:
-        r = coverage_map.get(ym)
-        paid = bool(r)
-        coverage_grid.append({
-            "ym": ym,
-            "label": _month_label(ym),
-            "paid": paid,
-            "status": (r.get("status") if r else "Not paid"),
-            "receipt_id": (r.get("receipt_id") if r else None),
-            "date_paid": (r.get("date_paid") if r else None),
-            "amount": (r.get("amount") if r else None),
-        })
+    lease_months, coverage_map, coverage_grid = build_coverage_grid(t, tenant_receipts)
 
 
     return render_template(
