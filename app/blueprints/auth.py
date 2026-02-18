@@ -19,7 +19,13 @@ from flask import (
     flash,
 )
 
-from ..services.utils import canonicalize_email, user_id_for_email, send_email
+from ..services.utils import (
+    canonicalize_email,
+    user_id_for_email,
+    send_email,
+    tenant_directory_path,
+    tenant_email_key
+)
 
 bp = Blueprint("auth", __name__)
 
@@ -118,18 +124,21 @@ def send_login_link(to_email: str, token: str) -> bool:
 
 @bp.get("/login")
 def login_form():
-    return render_template("login.html")
+    # Default tenant, allow switch via ?mode=owner
+    mode = (request.args.get("mode") or "tenant").strip().lower()
+    if mode not in ("tenant", "owner"):
+        mode = "tenant"
 
-from flask import request, redirect, url_for, flash, current_app
-
-# uses your existing helpers in this file:
-# - create_magic_token(email, ttl_secs=900)
-# - send_login_link(email, token)
+    return render_template("login.html", mode=mode)
 
 
+
+
+@bp.post("/login")
 def login_submit():
-    # Tenant login is default; owner login is explicit.
     mode = (request.form.get("mode") or request.args.get("mode") or "tenant").strip().lower()
+    if mode not in ("tenant", "owner"):
+        mode = "tenant"
 
     email = (request.form.get("email") or "").strip().lower()
     if not email or "@" not in email:
@@ -137,27 +146,18 @@ def login_submit():
         return redirect(url_for("auth.login_form", mode=mode))
 
     # ----------------------------
-    # TENANT MODE
+    # TENANT MODE (public, no owner session needed)
     # ----------------------------
     if mode == "tenant":
-        # load tenants owned by the currently logged-in owner
-        # (this must use the same pattern as your rental_admin blueprints)
-        tenants = _load_tenants()  # dict keyed by tenant_id -> tenant dict
+        rec = current_app.config_store.read_json(tenant_directory_path(email)) or {}
 
-        # Find tenant by email
-        matched = None
-        for tid, t in (tenants or {}).items():
-            if not isinstance(t, dict):
-                continue
-            t_email = (t.get("email") or "").strip().lower()
-            if t_email and t_email == email:
-                matched = t
-                break
-
-        if not matched:
+        if not rec or rec.get("active") is not True:
+            # Optional: add tiny delay to reduce email-enumeration
+            time.sleep(0.35)
             flash("Email not found. Ask your landlord to add you as a tenant.", "error")
             return redirect(url_for("auth.login_form", mode="tenant"))
 
+        # Create token and send link (we’ll add owner_user_id/tenant_id to pending token next)
         token = create_magic_token(email, ttl_secs=900)
         try:
             send_login_link(email, token)
