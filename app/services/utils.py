@@ -8,7 +8,6 @@ import os
 import requests
 import datetime as dt
 
-from __future__ import annotations
 from typing import Any, Optional, Tuple
 from google.cloud import storage
 from google.api_core.exceptions import NotFound, Forbidden
