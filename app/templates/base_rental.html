@@ -15,6 +15,7 @@
       a{text-decoration:none}
       a:hover{text-decoration:underline}
 
+      /* Rental layout */
       .layout{display:flex; min-height:100vh;}
       .sidebar{width:240px; padding:1.25rem; border-right:1px solid #e5e7eb; background:#fafafa;}
       .sidebar .brand{font-weight:800; margin-bottom:1rem;}
@@ -37,16 +38,19 @@
         <a href="/overview">← Back to Personal Finance</a>
 
         <div class="section">Admin</div>
-        <a href="{{ url_for('rental_admin.property_list') }}">Properties</a>
+        <a href="{{ url_for('rental_admin.properties') }}">Properties</a>
         <a href="{{ url_for('receipts.new_rent_receipt') }}">Receipts</a>
       </aside>
 
       <main class="content">
         <nav class="topnav">
-          <a href="{{ url_for('rental_admin.property_list') }}"
-             class="{{ 'active' if request.endpoint in ('rental_admin.property_list','rental_admin.property_edit') else '' }}">
+          <a href="{{ url_for('rental_admin.properties') }}"
+             class="{{ 'active' if request.endpoint in ('rental_admin.properties','rental_admin.property_edit') else '' }}">
             Properties
           </a>
+          <!-- future tabs -->
+          <!-- <a href="...">Tenants</a> -->
+          <!-- <a href="...">Payments</a> -->
         </nav>
 
         {% block content %}{% endblock %}

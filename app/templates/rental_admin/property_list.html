@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1 style="margin-top:0;">Rental Units</h1>
+  <p class="muted">Add a unit and manage existing listings.</p>
+
+  <h3>Add unit</h3>
+  <form method="POST" style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:.75rem; align-items:end;">
+    <div>
+      <label>Address</label><br>
+      <input name="address" value="{{ form.get('address','') }}" style="width:100%;" required>
+    </div>
+    <div>
+      <label>Price</label><br>
+      <input name="price" value="{{ form.get('price','') }}" placeholder="1500 or 1500.00" required>
+    </div>
+    <div>
+      <label>Tenant</label><br>
+      <input name="tenant" value="{{ form.get('tenant','') }}" placeholder="Vacant">
+    </div>
+    <div>
+      <button type="submit">Add</button>
+    </div>
+  </form>
+
+  <hr style="margin:1rem 0;">
+
+  <h3>Units</h3>
+
+  {% if units and units|length > 0 %}
+    <table style="width:100%;">
+      <thead>
+        <tr>
+          <th>Address</th>
+          <th>Price</th>
+          <th>Tenant</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for unit_id, u in units.items() %}
+          <tr>
+            <td>{{ u.address }}</td>
+            <td>{{ u.price }}</td>
+            <td>{{ u.tenant or "Vacant" }}</td>
+            <td>
+              <a href="{{ url_for('rental_admin.unit_edit', unit_id=unit_id) }}">Edit</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No units yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
