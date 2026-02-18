@@ -206,7 +206,7 @@ def _load_tenants():
 def _save_tenants(tenants: dict) -> None:
     current_app.gcs.write_json(_tenants_path(), tenants)
 
-def lease_is_active(tenant: dict, now_utc: Optional[dt.datetime] = None) -> bool:
+def lease_is_active(tenant: dict, now_utc: dt.datetime | None = None) -> bool:
     """
     Lease is active if now is within [start_date, end_date).
 
