@@ -376,3 +376,141 @@ def tenant_lease_download(tenant_id: str):
         download_name=filename,
         max_age=0,
     )
+
+# =========================================================
+# Receipts
+# =========================================================
+
+RECEIPTS_PATH = "rentals/receipts.json"
+
+def _receipts_path() -> str:
+    _, user_id = current_user_identity()
+    return f"{user_prefix(user_id)}{RECEIPTS_PATH}"
+
+def _receipts_prefix() -> str:
+    _, user_id = current_user_identity()
+    return f"{user_prefix(user_id)}rentals/receipts/"
+
+def _load_receipts() -> dict:
+    data = current_app.gcs.read_json(_receipts_path()) or {}
+    return data if isinstance(data, dict) else {}
+
+def _save_receipts(receipts: dict) -> None:
+    current_app.gcs.write_json(_receipts_path(), receipts)
+
+@bp.post("/tenants/<tenant_id>/receipts")
+def tenant_receipt_upload(tenant_id: str):
+    tenants = _load_tenants()
+    t = tenants.get(tenant_id)
+    if not t:
+        flash("Tenant not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    # Required fields
+    covered_month = (request.form.get("covered_month") or "").strip()  # expect YYYY-MM
+    date_paid = (request.form.get("date_paid") or "").strip()          # YYYY-MM-DD
+    amount_raw = (request.form.get("amount") or "").strip()
+    payment_method = (request.form.get("payment_method") or "").strip()
+    status = (request.form.get("status") or "").strip()
+    check_number = (request.form.get("check_number") or "").strip() or None
+    notes = (request.form.get("notes") or "").strip() or None
+
+    # Parse amount
+    try:
+        amount = float(amount_raw) if amount_raw != "" else None
+    except ValueError:
+        amount = None
+
+    missing = []
+    if not covered_month: missing.append("covered_month")
+    if not date_paid: missing.append("date_paid")
+    if amount is None: missing.append("amount")
+    if not payment_method: missing.append("payment_method")
+    if not status: missing.append("status")
+
+    file = request.files.get("receipt_file")
+    if not file or not file.filename:
+        missing.append("receipt_file")
+
+    if missing:
+        flash(f"Missing or invalid: {', '.join(missing)}", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+    # Upload file
+    receipt_id = f"r_{uuid.uuid4().hex[:10]}"
+    safe_name = file.filename.replace("/", "_")
+    content_type = file.content_type or "application/pdf"
+    data = file.read()
+
+    receipt_path = f"{_receipts_prefix()}{tenant_id}/{receipt_id}/{safe_name}"
+    current_app.gcs.write_bytes(receipt_path, data, content_type=content_type)
+
+    now = int(time.time())
+    receipts = _load_receipts()
+    receipts[receipt_id] = {
+        "receipt_id": receipt_id,
+        "tenant_id": tenant_id,
+        "property_id": t.get("property_id"),
+        "covered_month": covered_month,
+        "date_paid": date_paid,
+        "amount": amount,
+        "payment_method": payment_method,
+        "check_number": check_number,
+        "status": status,
+        "notes": notes,
+        "file": {
+            "file_path": receipt_path,
+            "file_name": safe_name,
+            "content_type": content_type,
+            "uploaded_at": now,
+        },
+        "created_at": now,
+        "updated_at": now,
+    }
+    _save_receipts(receipts)
+
+    flash("Receipt uploaded.", "success")
+    return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+@bp.get("/receipts/<receipt_id>/view")
+def receipt_view(receipt_id: str):
+    receipts = _load_receipts()
+    r = receipts.get(receipt_id)
+    if not r:
+        flash("Receipt not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    f = r.get("file") or {}
+    path = f.get("file_path")
+    name = f.get("file_name") or "receipt"
+    ctype = f.get("content_type") or "application/octet-stream"
+
+    data = current_app.gcs.read_bytes(path) if path else None
+    if not data:
+        flash("Receipt file missing in storage.", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=r.get("tenant_id")))
+
+    import io
+    return send_file(io.BytesIO(data), mimetype=ctype, as_attachment=False, download_name=name, max_age=0)
+
+
+@bp.get("/receipts/<receipt_id>/download")
+def receipt_download(receipt_id: str):
+    receipts = _load_receipts()
+    r = receipts.get(receipt_id)
+    if not r:
+        flash("Receipt not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    f = r.get("file") or {}
+    path = f.get("file_path")
+    name = f.get("file_name") or "receipt"
+    ctype = f.get("content_type") or "application/octet-stream"
+
+    data = current_app.gcs.read_bytes(path) if path else None
+    if not data:
+        flash("Receipt file missing in storage.", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=r.get("tenant_id")))
+
+    import io
+    return send_file(io.BytesIO(data), mimetype=ctype, as_attachment=True, download_name=name, max_age=0)
