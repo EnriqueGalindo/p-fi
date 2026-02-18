@@ -137,47 +137,109 @@
   <!-- ========================= -->
   <!-- Lease Coverage Grid -->
   <!-- ========================= -->
-  <h2 style="margin:0 0 .5rem;">Lease Coverage</h2>
+    <h2 style="margin-top:1.25rem;">Lease Coverage</h2>
+    <p class="muted" style="margin-top:.25rem;">
+    One square per month. Hover for details. Click a paid month to open the receipt.
+    </p>
 
-  {% if lease_months %}
-    <table style="width:100%;">
-      <thead>
-        <tr>
-          <th>Month</th>
-          <th>Status</th>
-          <th>Receipt</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for m in lease_months %}
-          {% set r = coverage_map.get(m) %}
-          <tr>
-            <td>{{ m }}</td>
-            <td>
-              {% if r %}
-                <span class="ok">{{ r.status }}</span>
-              {% else %}
-                <span class="bad">Not paid</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if r %}
-                <a href="{{ url_for('rental_admin.receipt_view', receipt_id=r.receipt_id) }}" target="_blank">View</a>
-                |
-                <a href="{{ url_for('rental_admin.receipt_download', receipt_id=r.receipt_id) }}">Download</a>
-              {% else %}
-                —
-              {% endif %}
-            </td>
-          </tr>
+    <style>
+    .gh-grid { display:flex; flex-direction:column; gap:.75rem; }
+    .gh-row { display:flex; align-items:center; gap:.75rem; }
+    .gh-year { width:52px; font-weight:700; color:#374151; }
+    .gh-months { display:grid; grid-template-columns: repeat(12, 14px); gap:6px; align-items:center; }
+    .gh-cell {
+        width:14px; height:14px; border-radius:3px;
+        background:#e5e7eb; border:1px solid #e5e7eb;
+        display:inline-block;
+        position:relative;
+    }
+    .gh-cell.paid { background:#16a34a; border-color:#16a34a; }
+    .gh-cell.partial { background:#d97706; border-color:#d97706; } /* if you later add partials */
+    .gh-cell.nsf { background:#dc2626; border-color:#dc2626; }     /* if you later add nsf */
+    .gh-cell:hover { outline:2px solid rgba(17,24,39,.25); outline-offset:2px; }
+
+    .gh-tip {
+        display:none;
+        position:absolute;
+        left:50%; transform:translateX(-50%);
+        bottom:22px;
+        white-space:nowrap;
+        background:#111827; color:white;
+        padding:6px 8px; border-radius:8px;
+        font-size:12px;
+        box-shadow:0 8px 20px rgba(0,0,0,.2);
+        z-index:10;
+    }
+    .gh-tip:after{
+        content:"";
+        position:absolute; left:50%; transform:translateX(-50%);
+        top:100%;
+        border:6px solid transparent;
+        border-top-color:#111827;
+    }
+    .gh-cell:hover .gh-tip { display:block; }
+
+    .gh-legend { display:flex; align-items:center; gap:.5rem; justify-content:flex-end; margin-top:.5rem; }
+    .gh-legend span { font-size:12px; color:#6b7280; }
+    .gh-dot { width:12px; height:12px; border-radius:3px; display:inline-block; }
+    </style>
+
+    {% if coverage_grid and coverage_grid|length > 0 %}
+    {# group into years in-template #}
+    {% set rows = {} %}
+    {% for c in coverage_grid %}
+        {% set year = c.ym.split('-')[0] %}
+        {% if year not in rows %}{% set _ = rows.update({year: []}) %}{% endif %}
+        {% set _ = rows[year].append(c) %}
+    {% endfor %}
+
+    <div class="gh-grid">
+        {% for year, months in rows.items()|sort %}
+        <div class="gh-row">
+            <div class="gh-year">{{ year }}</div>
+
+            <div class="gh-months">
+            {# ensure Jan..Dec ordering even if lease starts mid-year #}
+            {% for m in range(1, 13) %}
+                {% set mm = "%02d"|format(m) %}
+                {% set ym = year ~ "-" ~ mm %}
+                {% set cell = (months | selectattr("ym","equalto",ym) | list | first) %}
+                {% if cell %}
+                {% if cell.paid %}
+                    <a class="gh-cell paid"
+                    href="{{ url_for('rental_admin.receipt_detail', receipt_id=cell.receipt_id) }}">
+                    <span class="gh-tip">
+                        {{ cell.label }} — {{ cell.status }}
+                        {% if cell.date_paid %} · Paid {{ cell.date_paid }}{% endif %}
+                        {% if cell.amount is not none %} · ${{ "%.2f"|format(cell.amount) }}{% endif %}
+                    </span>
+                    </a>
+                {% else %}
+                    <span class="gh-cell">
+                    <span class="gh-tip">{{ cell.label }} — Not paid</span>
+                    </span>
+                {% endif %}
+                {% else %}
+                {# month outside lease range: render invisible spacer #}
+                <span style="width:14px; height:14px;"></span>
+                {% endif %}
+            {% endfor %}
+            </div>
+        </div>
         {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="muted">Set lease start and end dates to see coverage.</p>
-  {% endif %}
+    </div>
 
-  <hr style="margin:1.5rem 0;">
+    <div class="gh-legend">
+        <span>Less</span>
+        <i class="gh-dot" style="background:#e5e7eb;"></i>
+        <i class="gh-dot" style="background:#16a34a;"></i>
+        <span>More</span>
+    </div>
+
+    {% else %}
+    <p class="muted">Set lease start and end dates to see coverage.</p>
+    {% endif %}
+
 
   <!-- ========================= -->
   <!-- Receipt List -->

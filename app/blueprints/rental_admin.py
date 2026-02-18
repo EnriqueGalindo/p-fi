@@ -50,6 +50,13 @@ def _month_range(start_date: str, end_date: str) -> list[str]:
             cur = dt.date(cur.year, cur.month + 1, 1)
     return out
 
+def _month_label(ym: str) -> str:
+    # ym = "YYYY-MM"
+    y, m = ym.split("-", 1)
+    names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    return f"{names[int(m)-1]} {y}"
+
+
 
 PROPERTIES_PATH = "rentals/properties.json"
 
@@ -359,6 +366,21 @@ def tenant_edit(tenant_id: str):
             if (r.get("status") or "") == "NSF / returned":
                 continue
             coverage_map.setdefault(m, r)
+    
+    coverage_grid = []
+    for ym in lease_months:
+        r = coverage_map.get(ym)
+        paid = bool(r)
+        coverage_grid.append({
+            "ym": ym,
+            "label": _month_label(ym),
+            "paid": paid,
+            "status": (r.get("status") if r else "Not paid"),
+            "receipt_id": (r.get("receipt_id") if r else None),
+            "date_paid": (r.get("date_paid") if r else None),
+            "amount": (r.get("amount") if r else None),
+        })
+
 
     return render_template(
         "rental_admin/tenant_edit.html",
@@ -367,6 +389,7 @@ def tenant_edit(tenant_id: str):
         tenant_receipts=tenant_receipts,
         lease_months=lease_months,
         coverage_map=coverage_map,
+        coverage_grid=coverage_grid,
     )
 
 # =========================================================
@@ -580,3 +603,14 @@ def receipt_download(receipt_id: str):
 
     import io
     return send_file(io.BytesIO(data), mimetype=ctype, as_attachment=True, download_name=name, max_age=0)
+
+@bp.get("/receipts/<receipt_id>")
+def receipt_detail(receipt_id: str):
+    receipts = _load_receipts() or {}
+    r = receipts.get(receipt_id)
+    if not r:
+        flash("Receipt not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    return render_template("rental_admin/receipt_detail.html", receipt=r)
+
