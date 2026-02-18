@@ -1,31 +1,32 @@
-# app/blueprints/rental_admin.py
 import time
 import uuid
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session
+from ..services.utils import current_user_identity, user_prefix
 
 bp = Blueprint("rental_admin", __name__, url_prefix="/rental-admin")
 
-UNITS_PATH = "rentals/units.json"
+PROPERTIES_PATH = "rentals/properties.json"
 
 
-def _load_units() -> dict:
-    data = current_app.config_store.read_json(UNITS_PATH) or {}
-    # Ensure stable shape
-    if not isinstance(data, dict):
-        return {}
-    return data
+def _properties_path() -> str:
+    _, user_id = current_user_identity()
+    pref = user_prefix(user_id)
+    return f"{pref}{PROPERTIES_PATH}"
 
 
-def _save_units(units: dict) -> None:
-    current_app.config_store.write_json(UNITS_PATH, units)
+def _load_properties() -> dict:
+    data = current_app.gcs.read_json(_properties_path()) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_properties(properties: dict) -> None:
+    current_app.gcs.write_json(_properties_path(), properties)
 
 
 def _is_owner() -> bool:
-    # Simple gate for now. Later you can enforce real roles.
-    # If AUTH_DISABLED, you probably want access anyway.
     if current_app.config.get("AUTH_DISABLED"):
         return True
-    return bool(session.get("user_id"))  # tighten later to role=="owner"
+    return bool(session.get("user_id"))
 
 
 @bp.before_request
@@ -40,67 +41,88 @@ def index():
     return redirect(url_for("rental_admin.property_list"))
 
 
-@bp.route("/units", methods=["GET", "POST"])
+# =========================================================
+# PROPERTY LIST + CREATE
+# =========================================================
+@bp.route("/properties", methods=["GET", "POST"])
 def property_list():
-    units = _load_units()
+    properties = _load_properties()
 
     if request.method == "POST":
         address = (request.form.get("address") or "").strip()
-        price = (request.form.get("price") or "").strip()
+
+        price_raw = (request.form.get("price") or "").strip()
+        try:
+            price = float(price_raw) if price_raw != "" else None
+        except ValueError:
+            price = None
+
         tenant = (request.form.get("tenant") or "").strip() or "Vacant"
 
         missing = []
         if not address:
             missing.append("address")
-        if not price:
+        if price is None:
             missing.append("price")
 
         if missing:
-            flash(f"Missing: {', '.join(missing)}", "error")
-            return render_template("rental_admin/property_list.html", units=units, form=request.form)
+            flash(f"Missing or invalid: {', '.join(missing)}", "error")
+            return render_template("rental_admin/property_list.html", properties=properties, form=request.form)
 
-        unit_id = f"u_{uuid.uuid4().hex[:10]}"
-        units[unit_id] = {
-            "unit_id": unit_id,
+        property_id = f"p_{uuid.uuid4().hex[:10]}"
+
+        properties[property_id] = {
+            "property_id": property_id,
             "address": address,
             "price": price,
             "tenant": tenant,
             "created_at": int(time.time()),
             "updated_at": int(time.time()),
         }
-        _save_units(units)
-        flash("Unit added.", "success")
+
+        _save_properties(properties)
+        flash("Property added.", "success")
         return redirect(url_for("rental_admin.property_list"))
 
-    return render_template("rental_admin/property_list.html", units=units, form={})
+    return render_template("rental_admin/property_list.html", properties=properties, form={})
 
 
-@bp.route("/units/<unit_id>", methods=["GET", "POST"])
-def property_edit(unit_id: str):
-    units = _load_units()
-    unit = units.get(unit_id)
-    if not unit:
-        flash("Unit not found.", "error")
+# =========================================================
+# PROPERTY EDIT
+# =========================================================
+@bp.route("/properties/<property_id>", methods=["GET", "POST"])
+def property_edit(property_id: str):
+    properties = _load_properties()
+    prop = properties.get(property_id)
+
+    if not prop:
+        flash("Property not found.", "error")
         return redirect(url_for("rental_admin.property_list"))
 
     if request.method == "POST":
         address = (request.form.get("address") or "").strip()
-        price = (request.form.get("price") or "").strip()
+
+        price_raw = (request.form.get("price") or "").strip()
+        try:
+            price = float(price_raw) if price_raw != "" else None
+        except ValueError:
+            price = None
+
         tenant = (request.form.get("tenant") or "").strip() or "Vacant"
 
-        if not address or not price:
-            flash("Address and price are required.", "error")
-            return render_template("rental_admin/property_edit.html", unit=unit)
+        if not address or price is None:
+            flash("Address and valid price are required.", "error")
+            return render_template("rental_admin/property_edit.html", property=prop)
 
-        unit["address"] = address
-        unit["price"] = price
-        unit["tenant"] = tenant
-        unit["updated_at"] = int(time.time())
+        prop["address"] = address
+        prop["price"] = price
+        prop["tenant"] = tenant
+        prop["updated_at"] = int(time.time())
 
-        units[unit_id] = unit
-        _save_units(units)
+        properties[property_id] = prop
+        _save_properties(properties)
 
-        flash("Unit updated.", "success")
+        flash("Property updated.", "success")
         return redirect(url_for("rental_admin.property_list"))
 
-    return render_template("rental_admin/property_edit.html", unit=unit)
+    return render_template("rental_admin/property_edit.html", property=prop)
