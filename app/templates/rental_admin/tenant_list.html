@@ -58,11 +58,13 @@
             <td>{{ t.first_name }} {{ t.last_name }}</td>
             <td>{{ prop.address if prop else t.property_id }}</td>
             <td>
-              {% if t.lease and t.lease.file_name %}
-                {{ t.lease.file_name }}
-              {% else %}
-                <span class="muted">No file</span>
-              {% endif %}
+                {% if t.lease and t.lease.file_name %}
+                    <a href="{{ url_for('rental_admin.tenant_lease_view', tenant_id=tid) }}" target="_blank">Open</a>
+                    &nbsp;·&nbsp;
+                    <a href="{{ url_for('rental_admin.tenant_lease_download', tenant_id=tid) }}">Download</a>
+                {% else %}
+                    <span class="muted">No file</span>
+                {% endif %}
             </td>
             <td><a href="{{ url_for('rental_admin.tenant_edit', tenant_id=tid) }}">Edit</a></td>
           </tr>

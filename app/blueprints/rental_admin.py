@@ -1,6 +1,26 @@
 import time
 import uuid
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session
+
+# routing / rendering
+from flask import (
+    Blueprint,
+    current_app,
+    render_template,
+    redirect,
+    url_for,
+    flash,
+)
+
+# request / response handling
+from flask import (
+    request,
+    session,
+    Response,
+    send_file,
+)
+
+import io
+
 from ..services.utils import current_user_identity, user_prefix
 
 bp = Blueprint("rental_admin", __name__, url_prefix="/rental-admin")
@@ -285,4 +305,74 @@ def tenant_edit(tenant_id: str):
         "rental_admin/tenant_edit.html",
         tenant=t,
         properties=properties,
+    )
+
+# =========================================================
+# Tenant Lease View 
+# =========================================================
+
+@bp.get("/tenants/<tenant_id>/lease/view")
+def tenant_lease_view(tenant_id: str):
+    tenants = _load_tenants()
+    t = tenants.get(tenant_id)
+    if not t:
+        flash("Tenant not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    lease = (t.get("lease") or {})
+    path = lease.get("file_path")
+    filename = lease.get("file_name") or "lease.pdf"
+    content_type = lease.get("content_type") or "application/pdf"
+
+    if not path:
+        flash("No lease file uploaded for this tenant.", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+    data = current_app.gcs.read_bytes(path)
+    if not data:
+        flash("Lease file missing in storage.", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+    # inline=True opens in-browser for PDFs
+    return send_file(
+        io.BytesIO(data),
+        mimetype=content_type,
+        as_attachment=False,
+        download_name=filename,
+        max_age=0,
+    )
+
+# =========================================================
+# Tenant Lease Download
+# =========================================================
+
+@bp.get("/tenants/<tenant_id>/lease/download")
+def tenant_lease_download(tenant_id: str):
+    tenants = _load_tenants()
+    t = tenants.get(tenant_id)
+    if not t:
+        flash("Tenant not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    lease = (t.get("lease") or {})
+    path = lease.get("file_path")
+    filename = lease.get("file_name") or "lease.pdf"
+    content_type = lease.get("content_type") or "application/pdf"
+
+    if not path:
+        flash("No lease file uploaded for this tenant.", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+    data = current_app.gcs.read_bytes(path)
+    if not data:
+        flash("Lease file missing in storage.", "error")
+        return redirect(url_for("rental_admin.tenant_edit", tenant_id=tenant_id))
+
+    # as_attachment=True forces download
+    return send_file(
+        io.BytesIO(data),
+        mimetype=content_type,
+        as_attachment=True,
+        download_name=filename,
+        max_age=0,
     )
