@@ -72,6 +72,17 @@
                 {% endif %}
             </td>
             <td><a href="{{ url_for('rental_admin.tenant_edit', tenant_id=tid) }}">Edit</a></td>
+            <td>
+                <form method="POST"
+                    action="{{ url_for('rental_admin.delete_tenant', tenant_id=t.tenant_id) }}"
+                    onsubmit="return confirm('Delete this tenant? This cannot be undone.');"
+                    style="display:inline;">
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        Delete
+                    </button>
+                </form>
+            </td>
+
           </tr>
         {% endfor %}
       </tbody>

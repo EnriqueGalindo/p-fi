@@ -21,7 +21,7 @@ from flask import (
 
 import io
 
-from ..services.utils import current_user_identity, user_prefix, tenant_directory_path, tenant_email_key
+from ..services.utils import current_user_identity, user_prefix, tenant_directory_path, tenant_email_key, parse_ymd
 
 bp = Blueprint("rental_admin", __name__, url_prefix="/rental-admin")
 
@@ -205,6 +205,47 @@ def _load_tenants():
 
 def _save_tenants(tenants: dict) -> None:
     current_app.gcs.write_json(_tenants_path(), tenants)
+
+def lease_is_active(tenant: dict, now_utc: Optional[dt.datetime] = None) -> bool:
+    """
+    Lease is active if now is within [start_date, end_date).
+
+    Behavior choices:
+    - missing end_date → treat as active (safer default)
+    - missing start_date → treat as started
+    """
+
+    if now_utc is None:
+        now_utc = dt.datetime.utcnow().replace(microsecond=0)
+
+    lease = (tenant or {}).get("lease") or {}
+
+    start_dt = None
+    end_dt = None
+
+    try:
+        if lease.get("start_date"):
+            start_dt = parse_ymd(lease["start_date"])
+    except Exception:
+        pass
+
+    try:
+        if lease.get("end_date"):
+            end_dt = parse_ymd(lease["end_date"])
+    except Exception:
+        pass
+
+    # No end date → safest assumption is still active
+    if end_dt is None:
+        return True
+
+    # If start exists and hasn't begun → not active
+    if start_dt is not None and now_utc < start_dt:
+        return False
+
+    # Active until end (exclusive)
+    return now_utc < end_dt
+
 
 # =========================================================
 # Tenant List
@@ -419,6 +460,65 @@ def tenant_edit(tenant_id: str):
         coverage_map=coverage_map,
         coverage_grid=coverage_grid,
     )
+
+# =========================================================
+# Tenant Delete
+# =========================================================
+@bp.route("/tenants/<tenant_id>/delete", methods=["POST"])
+def delete_tenant(tenant_id):
+    tenants = _load_tenants()
+    properties = _load_properties()
+
+    tenant = tenants.get(tenant_id)
+    if not tenant:
+        flash("Tenant not found.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+    now = int(time.time())
+
+    if lease_is_active(tenant):
+        flash("Cannot delete tenant while lease is active.", "error")
+        return redirect(url_for("rental_admin.tenant_list"))
+
+
+    # Unlink property
+    property_id = tenant.get("property_id")
+    if property_id and property_id in properties:
+        prop = properties[property_id]
+
+        if prop.get("tenant_id") == tenant_id:
+            prop["tenant_id"] = None
+            prop["tenant"] = None
+            prop["updated_at"] = now
+            properties[property_id] = prop
+
+        _save_properties(properties)
+
+    # Delete lease file (if exists)
+    lease = tenant.get("lease", {})
+    file_path = lease.get("file_path")
+
+    if file_path:
+        try:
+            current_app.storage.delete(file_path)
+        except Exception:
+            current_app.logger.warning("Failed to delete lease file", exc_info=True)
+
+    # Remove from global tenant directory
+    email = tenant.get("email")
+    if email:
+        try:
+            current_app.config_store.delete(tenant_directory_path(email))
+        except Exception:
+            current_app.logger.warning("Failed to delete tenant directory entry", exc_info=True)
+
+    # Remove tenant record
+    tenants.pop(tenant_id)
+    _save_tenants(tenants)
+
+    flash("Tenant deleted.", "success")
+    return redirect(url_for("rental_admin.tenant_list"))
+
 
 # =========================================================
 # Tenant Lease View 
