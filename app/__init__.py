@@ -56,7 +56,7 @@ def create_app():
     from .blueprints.ledger_upload import bp as ledger_upload
     from app.blueprints.receipt import bp as receipts_bp
     from .blueprints.rental_admin import bp as rental_admin_bp
-
+    from app.blueprints import rental_tenant
     
     app.register_blueprint(auth_bp)
     app.register_blueprint(ledger_bp)
@@ -65,6 +65,7 @@ def create_app():
     app.register_blueprint(ledger_upload)
     app.register_blueprint(receipts_bp)
     app.register_blueprint(rental_admin_bp)
+    app.register_blueprint(rental_tenant.bp)
 
 
     return app

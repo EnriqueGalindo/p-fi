@@ -97,26 +97,31 @@ def mark_used(tid: str):
 # Email sender (via services.utils.send_email)
 # =============================================================================
 
-def send_login_link(to_email: str, token: str) -> bool:
-    link = f"{APP_BASE_URL}/auth/magic?{urlencode({'token': token})}"
+def send_login_link(to_email: str, token: str, mode: str = "tenant") -> bool:
+    mode = (mode or "tenant").strip().lower()
+    if mode not in ("tenant", "owner"):
+        mode = "tenant"
+
+    link = f"{APP_BASE_URL}/auth/magic?{urlencode({'token': token, 'mode': mode})}"
     subject = "Your gmoney.me sign-in link"
     text = f"Click to sign in (valid 15 minutes): {link}"
     html = f"""\
-<p>Click to sign in (valid 15 minutes):</p>
-<p><a href="{link}">{link}</a></p>
-"""
+        <p>Click to sign in (valid 15 minutes):</p>
+        <p><a href="{link}">{link}</a></p>
+    """
 
     ok, err = send_email(
         to_email,
         subject,
         text=text,
         html=html,
-        from_addr=MAIL_FROM,              # default can also come from env in send_email
-        tags=["magic-link", "login"],
+        from_addr=MAIL_FROM,
+        tags=["magic-link", "login", f"mode:{mode}"],
     )
     if not ok:
         raise RuntimeError(err or "Failed to send email")
     return True
+
 
 # =============================================================================
 # Views
@@ -145,51 +150,36 @@ def login_submit():
         flash("Enter a valid email.", "error")
         return redirect(url_for("auth.login_form", mode=mode))
 
-    # ----------------------------
-    # TENANT MODE (public, no owner session needed)
-    # ----------------------------
+    # Tenant lookup/validation only in tenant mode
     if mode == "tenant":
         rec = current_app.config_store.read_json(tenant_directory_path(email)) or {}
-
-        if not rec or rec.get("active") is not True:
-            # Optional: add tiny delay to reduce email-enumeration
-            time.sleep(0.35)
+        if rec.get("active") is not True:
+            time.sleep(0.35)  # reduce email-enumeration signal
             flash("Email not found. Ask your landlord to add you as a tenant.", "error")
             return redirect(url_for("auth.login_form", mode="tenant"))
 
-        # Create token and send link (we’ll add owner_user_id/tenant_id to pending token next)
-        token = create_magic_token(email, ttl_secs=900)
-        try:
-            send_login_link(email, token)
-        except Exception as e:
-            current_app.logger.exception("Failed to send tenant login email")
-            flash(f"Could not send email: {e}", "error")
-            return redirect(url_for("auth.login_form", mode="tenant"))
-
-        flash("We sent you a sign-in link. Please check your email.", "success")
-        return redirect(url_for("auth.login_form", mode="tenant"))
-
-    # ----------------------------
-    # OWNER MODE (your original behavior)
-    # ----------------------------
     token = create_magic_token(email, ttl_secs=900)
+
     try:
-        send_login_link(email, token)
+        # send_login_link signature now supports mode
+        send_login_link(email, token, mode=mode)
     except Exception as e:
         current_app.logger.exception("Failed to send login email")
         flash(f"Could not send email: {e}", "error")
-        return redirect(url_for("auth.login_form", mode="owner"))
+        return redirect(url_for("auth.login_form", mode=mode))
 
     flash("We sent you a sign-in link. Please check your email.", "success")
-    return redirect(url_for("auth.login_form", mode="owner"))
+    return redirect(url_for("auth.login_form", mode=mode))
 
 @bp.get("/auth/magic")
 def magic():
     token = request.args.get("token", "")
+    mode  = (request.args.get("mode") or "tenant").strip().lower()
+
     data, err = parse_and_validate(token)
     if err:
         flash(f"Sign-in link invalid: {err}", "error")
-        return redirect(url_for("auth.login_form"))
+        return redirect(url_for("auth.login_form", mode=mode))
 
     # Mark single-use
     mark_used(data["tid"])
@@ -202,6 +192,7 @@ def magic():
     session["user_email"] = email
     session["user_id"]    = uid
     session["auth_at"]    = int(time.time())
+    session["auth_mode"]  = mode
 
     # First-login scaffold + simple users registry
     pref = f"profiles/{uid}/"
@@ -226,6 +217,10 @@ def magic():
             f"{users_root}/by_email/{ekey}.json",
             {"user_id": uid, "email": email},
         )
+
+    # Redirect based on mode
+    if mode == "tenant":
+        return redirect(url_for("rental_tenant.tenant_portal"))
 
     return redirect(url_for("plan.view_plan"))
 
