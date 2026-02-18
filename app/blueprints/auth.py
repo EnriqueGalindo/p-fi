@@ -120,23 +120,68 @@ def send_login_link(to_email: str, token: str) -> bool:
 def login_form():
     return render_template("login.html")
 
-@bp.post("/login")
+from flask import request, redirect, url_for, flash, current_app
+
+# uses your existing helpers in this file:
+# - create_magic_token(email, ttl_secs=900)
+# - send_login_link(email, token)
+
+
 def login_submit():
+    # Tenant login is default; owner login is explicit.
+    mode = (request.form.get("mode") or request.args.get("mode") or "tenant").strip().lower()
+
     email = (request.form.get("email") or "").strip().lower()
     if not email or "@" not in email:
         flash("Enter a valid email.", "error")
-        return redirect(url_for("auth.login_form"))
+        return redirect(url_for("auth.login_form", mode=mode))
 
+    # ----------------------------
+    # TENANT MODE
+    # ----------------------------
+    if mode == "tenant":
+        # load tenants owned by the currently logged-in owner
+        # (this must use the same pattern as your rental_admin blueprints)
+        tenants = _load_tenants()  # dict keyed by tenant_id -> tenant dict
+
+        # Find tenant by email
+        matched = None
+        for tid, t in (tenants or {}).items():
+            if not isinstance(t, dict):
+                continue
+            t_email = (t.get("email") or "").strip().lower()
+            if t_email and t_email == email:
+                matched = t
+                break
+
+        if not matched:
+            flash("Email not found. Ask your landlord to add you as a tenant.", "error")
+            return redirect(url_for("auth.login_form", mode="tenant"))
+
+        token = create_magic_token(email, ttl_secs=900)
+        try:
+            send_login_link(email, token)
+        except Exception as e:
+            current_app.logger.exception("Failed to send tenant login email")
+            flash(f"Could not send email: {e}", "error")
+            return redirect(url_for("auth.login_form", mode="tenant"))
+
+        flash("We sent you a sign-in link. Please check your email.", "success")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    # ----------------------------
+    # OWNER MODE (your original behavior)
+    # ----------------------------
     token = create_magic_token(email, ttl_secs=900)
     try:
         send_login_link(email, token)
     except Exception as e:
         current_app.logger.exception("Failed to send login email")
         flash(f"Could not send email: {e}", "error")
-        return redirect(url_for("auth.login_form"))
+        return redirect(url_for("auth.login_form", mode="owner"))
 
     flash("We sent you a sign-in link. Please check your email.", "success")
-    return redirect(url_for("auth.login_form"))
+    return redirect(url_for("auth.login_form", mode="owner"))
 
 @bp.get("/auth/magic")
 def magic():

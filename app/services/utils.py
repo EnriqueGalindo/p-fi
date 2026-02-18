@@ -334,3 +334,12 @@ def get_valid_types(category: str) -> list[str]:
         raise RuntimeError(f"No valid_types defined for {category!r} in type_config.json")
 
     return types
+
+#---------- tenant utils ----------
+
+def tenant_email_key(email: str) -> str:
+    e = (email or "").strip().lower()
+    return hashlib.sha256(e.encode("utf-8")).hexdigest()[:16]
+
+def tenant_directory_path(email: str) -> str:
+    return f"rentals/tenant_directory/by_email/{tenant_email_key(email)}.json"

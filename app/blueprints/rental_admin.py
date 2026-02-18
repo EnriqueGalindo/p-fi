@@ -21,7 +21,7 @@ from flask import (
 
 import io
 
-from ..services.utils import current_user_identity, user_prefix
+from ..services.utils import current_user_identity, user_prefix, tenant_directory_path, tenant_email_key
 
 bp = Blueprint("rental_admin", __name__, url_prefix="/rental-admin")
 
@@ -269,6 +269,20 @@ def tenant_list():
             _save_properties(properties)
 
         _save_tenants(tenants)
+        # REGISTER TENANT IN GLOBAL TENANT DIRECTORY
+        if email:
+            _, owner_user_id = current_user_identity()
+            now = int(time.time())
+
+            current_app.config_store.write_json(
+                tenant_directory_path(email),
+                {
+                    "owner_user_id": owner_user_id,
+                    "tenant_id": tenant_id,
+                    "active": True,
+                    "updated_at": now,
+                }
+            )
         flash("Tenant added.", "success")
         return redirect(url_for("rental_admin.tenant_list"))
 

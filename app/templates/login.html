@@ -1,20 +1,303 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card" style="max-width:460px">
-  <h1>Sign in</h1>
-  {% with msgs=get_flashed_messages(with_categories=true) %}
-    {% if msgs %}
-      <ul>
-        {% for cat,msg in msgs %}
-          <li class="muted">{{ msg }}</li>
-        {% endfor %}
-      </ul>
-    {% endif %}
-  {% endwith %}
-  <form method="post" action="{{ url_for('auth.login_submit') }}">
-    <label>Email</label>
-    <input name="email" type="email" placeholder="you@gmoney.me" required>
-    <button type="submit">Send sign-in link</button>
-  </form>
-</div>
-{% endblock %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>{{ "Tenant Sign in" if (mode or "tenant") == "tenant" else "Owner Sign in" }} — gmoney</title>
+
+    <style>
+      :root{
+        --bg:#0b1020;
+        --panel:#0f172a;
+        --card:#0b1224;
+        --text:#e5e7eb;
+        --muted:#94a3b8;
+        --line:rgba(255,255,255,.10);
+        --accent:#7c3aed; /* purple */
+        --accent2:#22c55e; /* green */
+        --danger:#ef4444;
+        --shadow: 0 18px 60px rgba(0,0,0,.45);
+        --radius: 18px;
+      }
+      *{box-sizing:border-box}
+      body{
+        margin:0;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        color:var(--text);
+        background:
+          radial-gradient(1000px 600px at 20% 10%, rgba(124,58,237,.35), transparent 55%),
+          radial-gradient(900px 540px at 80% 20%, rgba(34,197,94,.22), transparent 60%),
+          radial-gradient(1200px 700px at 50% 120%, rgba(59,130,246,.15), transparent 55%),
+          var(--bg);
+        min-height:100vh;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:24px;
+      }
+
+      .shell{
+        width:min(980px, 100%);
+        display:grid;
+        grid-template-columns: 1.1fr .9fr;
+        gap:22px;
+      }
+
+      @media (max-width: 860px){
+        .shell{grid-template-columns:1fr}
+      }
+
+      .left{
+        padding:28px;
+        border:1px solid var(--line);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+        box-shadow: var(--shadow);
+      }
+
+      .brand{
+        display:flex;
+        align-items:center;
+        gap:14px;
+        margin-bottom:18px;
+      }
+      .brand img{
+        width:56px;height:56px;border-radius:14px;
+        background: rgba(255,255,255,.06);
+        border:1px solid var(--line);
+        object-fit:cover;
+      }
+      .brand .title{
+        font-weight:800;
+        letter-spacing:.2px;
+        font-size:20px;
+        line-height:1.1;
+      }
+      .brand .subtitle{
+        color:var(--muted);
+        font-size:13px;
+        margin-top:3px;
+      }
+
+      .switch{
+        display:flex;
+        gap:10px;
+        margin: 14px 0 18px;
+      }
+      .pill{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        gap:8px;
+        padding:10px 12px;
+        border-radius: 999px;
+        border:1px solid var(--line);
+        background: rgba(0,0,0,.20);
+        color: var(--text);
+        text-decoration:none;
+        font-weight:700;
+        font-size:13px;
+        cursor:pointer;
+        user-select:none;
+      }
+      .pill.active{
+        border-color: rgba(124,58,237,.55);
+        box-shadow: 0 0 0 3px rgba(124,58,237,.18);
+      }
+
+      .card{
+        margin-top:10px;
+        padding:18px;
+        border-radius: 16px;
+        border:1px solid var(--line);
+        background: rgba(0,0,0,.22);
+      }
+
+      h1{
+        margin:0 0 8px;
+        font-size:40px;
+        letter-spacing:-.6px;
+      }
+      .lead{
+        margin:0 0 16px;
+        color: var(--muted);
+        line-height:1.4;
+      }
+
+      label{
+        font-size:12px;
+        color: var(--muted);
+        font-weight:700;
+        display:block;
+        margin-bottom:6px;
+      }
+      input{
+        width:100%;
+        padding:12px 12px;
+        border-radius: 12px;
+        border:1px solid var(--line);
+        background: rgba(255,255,255,.04);
+        color: var(--text);
+        outline:none;
+      }
+      input:focus{
+        border-color: rgba(124,58,237,.7);
+        box-shadow: 0 0 0 3px rgba(124,58,237,.18);
+      }
+
+      .grid{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap:12px;
+      }
+      @media (max-width: 520px){
+        .grid{grid-template-columns:1fr}
+      }
+
+      .btn{
+        width:100%;
+        padding:12px 14px;
+        border-radius: 12px;
+        border:1px solid rgba(124,58,237,.55);
+        background: linear-gradient(180deg, rgba(124,58,237,.95), rgba(124,58,237,.80));
+        color:white;
+        font-weight:800;
+        cursor:pointer;
+        margin-top:12px;
+      }
+      .btn:hover{filter:brightness(1.03)}
+      .hint{
+        margin-top:10px;
+        color: var(--muted);
+        font-size:12px;
+        line-height:1.35;
+      }
+
+      .flash{
+        margin: 10px 0 0;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border:1px solid var(--line);
+        background: rgba(255,255,255,.04);
+        font-size:13px;
+        color: var(--text);
+      }
+      .flash.success{border-color: rgba(34,197,94,.35)}
+      .flash.error{border-color: rgba(239,68,68,.40)}
+      .flash.info{border-color: rgba(59,130,246,.35)}
+
+      .right{
+        padding:28px;
+        border:1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(0,0,0,.18);
+        box-shadow: var(--shadow);
+      }
+      .right h2{
+        margin:0 0 10px;
+        font-size:16px;
+        color: var(--text);
+      }
+      .right ul{
+        margin:0; padding-left:18px;
+        color: var(--muted);
+        line-height:1.6;
+        font-size:13px;
+      }
+      .badge{
+        display:inline-block;
+        padding:6px 10px;
+        border-radius:999px;
+        border:1px solid var(--line);
+        background: rgba(255,255,255,.04);
+        color: var(--muted);
+        font-size:12px;
+        font-weight:700;
+        margin-top:12px;
+      }
+    </style>
+  </head>
+
+  <body>
+    {% set m = (mode or request.args.get('mode','tenant')) %}
+    <div class="shell">
+      <section class="left">
+        <div class="brand">
+          <img src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="gmoney logo">
+          <div>
+            <div class="title">gmoney rentals</div>
+            <div class="subtitle">Receipts • Lease coverage • Payments</div>
+          </div>
+        </div>
+
+        <div class="switch">
+          <a class="pill {{ 'active' if m=='tenant' else '' }}"
+             href="{{ url_for('auth.login_form', mode='tenant') }}">Tenant sign in</a>
+          <a class="pill {{ 'active' if m=='owner' else '' }}"
+             href="{{ url_for('auth.login_form', mode='owner') }}">Owner sign in</a>
+        </div>
+
+        <div class="card">
+          <h1>{{ "Sign in" }}</h1>
+          <p class="lead">
+            {% if m == 'tenant' %}
+              Enter your email and tenant code. We’ll email you a secure sign-in link.
+            {% else %}
+              Enter your owner email. We’ll email you a secure sign-in link.
+            {% endif %}
+          </p>
+
+          <form method="POST" action="{{ url_for('auth.login_submit') }}">
+            <input type="hidden" name="mode" value="{{ m }}"/>
+
+            <div class="grid">
+              <div style="grid-column: 1 / -1;">
+                <label>Email</label>
+                <input name="email" type="email" placeholder="you@email.com" required>
+              </div>
+
+              {% if m == 'tenant' %}
+                <div style="grid-column: 1 / -1;">
+                  <label>Tenant code</label>
+                  <input name="tenant_code" placeholder="e.g. 4F7ZCIYX" autocomplete="off" required>
+                </div>
+              {% endif %}
+            </div>
+
+            <button class="btn" type="submit">Send sign-in link</button>
+
+            <div class="hint">
+              {% if m == 'tenant' %}
+                Don’t have your code? Ask your landlord to resend it (recovery page can come later).
+              {% else %}
+                Owner access is restricted.
+              {% endif %}
+            </div>
+          </form>
+
+          {# Flash messages (cap to last 3 so it never floods the page) #}
+          {% with msgs = get_flashed_messages(with_categories=True) %}
+            {% if msgs %}
+              {% for category, message in msgs[-3:] %}
+                <div class="flash {{ category }}">{{ message }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+        </div>
+      </section>
+
+      <aside class="right">
+        <h2>What you can do</h2>
+        <ul>
+          <li>View lease coverage month-by-month</li>
+          <li>Access receipts (view + download)</li>
+          <li>Make payments (Stripe next)</li>
+        </ul>
+
+        <div class="badge">
+          {{ "Tenant portal" if m=='tenant' else "Owner portal" }}
+        </div>
+      </aside>
+    </div>
+  </body>
+</html>
