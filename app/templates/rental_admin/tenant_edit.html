@@ -1,0 +1,54 @@
+{% extends "base_rental.html" %}
+{% block content %}
+<div class="card" style="max-width:820px;">
+  <h1 style="margin-top:0;">Edit Tenant</h1>
+
+  <form method="POST" enctype="multipart/form-data" style="display:grid; gap:.75rem;">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.75rem;">
+      <div>
+        <label>First Name</label><br>
+        <input name="first_name" value="{{ tenant.first_name }}" required>
+      </div>
+      <div>
+        <label>Last Name</label><br>
+        <input name="last_name" value="{{ tenant.last_name }}" required>
+      </div>
+    </div>
+
+    <div>
+      <label>Property</label><br>
+      <select name="property_id" required>
+        {% for pid, p in properties.items() %}
+          <option value="{{ pid }}" {{ "selected" if tenant.property_id==pid else "" }}>
+            {{ p.address }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:.75rem;">
+      <div>
+        <label>Lease Start</label><br>
+        <input name="lease_start" type="date" value="{{ tenant.lease.start_date or '' }}">
+      </div>
+      <div>
+        <label>Lease End</label><br>
+        <input name="lease_end" type="date" value="{{ tenant.lease.end_date or '' }}">
+      </div>
+    </div>
+
+    <div>
+      <label>Signed Lease (PDF)</label><br>
+      <input name="lease_file" type="file" accept="application/pdf">
+      {% if tenant.lease and tenant.lease.file_name %}
+        <div class="muted" style="margin-top:.25rem;">Current: {{ tenant.lease.file_name }}</div>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; gap:.75rem;">
+      <button type="submit">Save</button>
+      <a href="{{ url_for('rental_admin.tenant_list') }}">Back</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

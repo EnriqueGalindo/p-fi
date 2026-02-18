@@ -101,8 +101,6 @@
         <a href="{{ url_for('plan.view_plan') }}">← Back to Personal Finance</a>
 
         <div class="section">Admin</div>
-        <a href="{{ url_for('rental_admin.property_list') }}">Properties</a>
-        <a href="{{ url_for('receipts.new_rent_receipt') }}">Receipts</a>
       </aside>
 
 
@@ -122,6 +120,11 @@
                 else '' }}">
             Properties
           </a>
+          <a href="{{ url_for('rental_admin.tenant_list') }}"
+            class="{{ 'active' if request.endpoint in ('rental_admin.tenant_list','rental_admin.tenant_edit') else '' }}">
+            Tenants
+          </a>
+
 
           {# future tabs #}
           {# <a href="#">Tenants</a> #}

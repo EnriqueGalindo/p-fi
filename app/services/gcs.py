@@ -49,6 +49,46 @@ class GcsStore:
                     raise
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 8.0)
+    
+    def read_bytes(self, path: str) -> Optional[bytes]:
+        blob = self.bucket.blob(path)
+        try:
+            if not blob.exists():
+                return None
+            return blob.download_as_bytes()
+        except gax_exc.NotFound:
+            return None
+        except Exception:
+            return None
+
+
+    def write_bytes(self, path: str, data: bytes, content_type: str = "application/octet-stream"):
+        blob = self.bucket.blob(path)
+
+        # Try library-level retry first (newer google-cloud-storage)
+        if GCS_DEFAULT_RETRY is not None:
+            try:
+                blob.upload_from_string(data, content_type=content_type, retry=GCS_DEFAULT_RETRY, timeout=60)
+                return
+            except TypeError:
+                # Some versions don’t accept retry kwarg on this call
+                pass
+            except (gax_exc.TooManyRequests, gax_exc.ServiceUnavailable, gax_exc.DeadlineExceeded):
+                # Fall through to manual backoff below
+                pass
+
+        # Manual exponential backoff for transient errors
+        backoff = 0.5
+        for attempt in range(6):  # ~0.5 + 1 + 2 + 4 + 8 + 8 ~= 23.5s
+            try:
+                blob.upload_from_string(data, content_type=content_type, timeout=60)
+                return
+            except (gax_exc.TooManyRequests, gax_exc.ServiceUnavailable, gax_exc.DeadlineExceeded):
+                if attempt == 5:
+                    raise
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 8.0)
+
 
     def read_json(self, path):
         blob = self.bucket.blob(path)
@@ -90,5 +130,3 @@ class GcsStore:
             blob.delete()
         except gax_exc.NotFound:
             pass
-
-

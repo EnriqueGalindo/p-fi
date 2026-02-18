@@ -1,0 +1,76 @@
+{% extends "base_rental.html" %}
+{% block content %}
+<div class="card">
+  <h1 style="margin-top:0;">Tenants</h1>
+  <p class="muted">Create tenants and attach them to properties. Upload signed leases on the edit screen.</p>
+
+  <h3>Add tenant</h3>
+  <form method="POST" style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto; gap:.75rem; align-items:end;">
+    <div>
+      <label>First Name</label><br>
+      <input name="first_name" value="{{ form.get('first_name','') }}" required>
+    </div>
+    <div>
+      <label>Last Name</label><br>
+      <input name="last_name" value="{{ form.get('last_name','') }}" required>
+    </div>
+    <div>
+      <label>Property</label><br>
+      <select name="property_id" required>
+        <option value="">-- select --</option>
+        {% for pid, p in properties.items() %}
+          <option value="{{ pid }}" {{ "selected" if form.get("property_id")==pid else "" }}>
+            {{ p.address }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Lease Start</label><br>
+      <input name="lease_start" type="date" value="{{ form.get('lease_start','') }}">
+    </div>
+    <div>
+      <label>Lease End</label><br>
+      <input name="lease_end" type="date" value="{{ form.get('lease_end','') }}">
+    </div>
+    <div>
+      <button type="submit">Add</button>
+    </div>
+  </form>
+
+  <hr style="margin:1rem 0;">
+
+  <h3>Tenant list</h3>
+  {% if tenants and tenants|length > 0 %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Property</th>
+          <th>Lease</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tid, t in tenants.items() %}
+          {% set prop = properties.get(t.property_id) %}
+          <tr>
+            <td>{{ t.first_name }} {{ t.last_name }}</td>
+            <td>{{ prop.address if prop else t.property_id }}</td>
+            <td>
+              {% if t.lease and t.lease.file_name %}
+                {{ t.lease.file_name }}
+              {% else %}
+                <span class="muted">No file</span>
+              {% endif %}
+            </td>
+            <td><a href="{{ url_for('rental_admin.tenant_edit', tenant_id=tid) }}">Edit</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No tenants yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
