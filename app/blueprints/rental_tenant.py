@@ -445,18 +445,23 @@ def receipt_download(receipt_id: str):
         flash(rerr, "error")
         return redirect(url_for("rental_tenant.tenant_portal"))
 
-    # Reuse your existing rent receipt HTML template (owner-safe, no auth assumptions)
+    prop = (properties or {}).get((tenant or {}).get("property_id")) or {}
+
     html = render_template(
-        "rental_tenant/receipt_download.html",
-        receipt=receipt,
-        tenant=tenant,
-        properties=properties,
+        "receipts/rent_receipt.html",
+        renter_first=(tenant or {}).get("first_name", ""),
+        renter_last=(tenant or {}).get("last_name", ""),
+        renter_email=(tenant or {}).get("email", ""),
+        rental_address=(prop or {}).get("address", "—"),
+        date_paid=(receipt or {}).get("date_paid", "—"),
+        month_covered=(receipt or {}).get("covered_month", "—"),
+        amount_paid=f"${float((receipt or {}).get('amount') or 0):.2f}",
+        payment_status=(receipt or {}).get("status", "—"),
+        payment_method=(receipt or {}).get("payment_method", "—"),
+        check_number=(receipt or {}).get("check_number"),
     )
 
-
-    # MVP: download as HTML file.
-    # If you already have PDF generation in rental_admin, swap this to return PDF bytes instead.
-    filename = f"rent_receipt_{receipt.get('covered_month','')}_{receipt_id}.html".replace("/", "_")
+    filename = f"rent_receipt_{(receipt or {}).get('covered_month','')}_{receipt_id}.html".replace("/", "_")
     return Response(
         html,
         headers={
