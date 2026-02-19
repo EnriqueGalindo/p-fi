@@ -26,7 +26,7 @@
           <div class="card">
   <h1>Tenant portal</h1>
 
-    <!-- KPI grid -->
+<!-- KPI grid -->
     <div style="
         margin-top:12px;
         display:grid;
@@ -53,17 +53,20 @@
         ">
             {{ tenant.first_name }} {{ tenant.last_name }}
         </div>
+
+        <!-- CTA (LEFT column) -->
+        <div style="grid-column:1; margin-top:10px;">
+            <a class="btn" href="{{ url_for('rental_tenant.pay') }}">Make a payment</a>
+
+            <p class="lead muted" style="margin-top:.5rem;">
+                You’ll be redirected to Stripe to complete your payment.
+            </p>
+        </div>
+
+        <!-- empty cell to preserve grid structure -->
+        <div></div>
+
     </div>
-
-    <!-- CTA -->
-    <a class="btn" href="{{ url_for('rental_tenant.pay') }}">Make a payment</a>
-
-
-    <p class="lead muted" style="margin-top:.5rem;">
-        You’ll be redirected to Stripe to complete your payment.
-    </p>
-    </div>
-
 
           <div class="card">
             <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
