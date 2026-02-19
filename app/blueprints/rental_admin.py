@@ -114,7 +114,6 @@ def property_list():
 
     return render_template("rental_admin/property_list.html", properties=properties, form={})
 
-
 # =========================================================
 # PROPERTY EDIT
 # =========================================================

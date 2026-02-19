@@ -1,9 +1,13 @@
 # app/blueprints/rental_tenant.py
 from __future__ import annotations
+import os
+import uuid
+import stripe
 
 import datetime as dt
-from flask import Blueprint, current_app, render_template, session, redirect, url_for, flash
+from flask import Blueprint, current_app, render_template, session, redirect, url_for, flash, request
 from ..services.utils import tenant_directory_path, parse_ymd, build_coverage_grid
+
 
 bp = Blueprint("rental_tenant", __name__)
 
@@ -56,7 +60,7 @@ def _load_tenant_context_for_email(email: str):
     # If you already generate coverage_grid in rental_admin.tenant_edit, call that same helper.
     lease_months, coverage_map, coverage_grid = build_coverage_grid(tenant, tenant_receipts)
 
-    return tenant, properties, tenant_receipts, coverage_grid, None
+    return entry, tenant, properties, tenant_receipts, coverage_grid, None
 
 
 def compute_next_payment_due(tenant: dict, tenant_receipts: dict, now_utc: dt.datetime | None = None) -> dt.date | None:
@@ -104,6 +108,60 @@ def compute_next_payment_due(tenant: dict, tenant_receipts: dict, now_utc: dt.da
 
     return None
 
+def _money_to_cents(amount: float) -> int:
+    return int(round(amount * 100))
+
+def _cents_to_money(cents: int) -> float:
+    return round(cents / 100.0, 2)
+
+def _rent_amount_for_tenant(tenant: dict, properties: dict) -> float | None:
+    prop_id = (tenant or {}).get("property_id")
+    prop = (properties or {}).get(prop_id) or {}
+    price = prop.get("price")
+    try:
+        return float(price) if price is not None else None
+    except Exception:
+        return None
+
+def _next_due_month_ym(next_due: dt.date | None) -> str | None:
+    if not next_due:
+        return None
+    return f"{next_due.year:04d}-{next_due.month:02d}"
+
+def _payment_policy(now_local: dt.datetime, due_month_start: dt.datetime, rent: float) -> dict:
+    """
+    Rules:
+    - If it's before the next month that needs to be paid => allow partial payments.
+      (interpreted as: now < first day of due month)
+    - If it's between the 1st and 5th => require full amount
+    - If it's 6 days or later after the 1st => add late fee of 5% (and full required)
+    """
+    allow_partial = False
+    require_full = True
+    late_fee = 0.0
+
+    if now_local < due_month_start:
+        allow_partial = True
+        require_full = False
+    else:
+        # we are in or after the due month
+        if now_local.day <= 5:
+            allow_partial = False
+            require_full = True
+        else:
+            allow_partial = False
+            require_full = True
+            late_fee = round(rent * 0.05, 2)
+
+    total_due = round(rent + late_fee, 2)
+    return {
+        "allow_partial": allow_partial,
+        "require_full": require_full,
+        "late_fee": late_fee,
+        "total_due": total_due,
+    }
+
+
 # ---- routes ------------------------------------------------------
 
 @bp.get("/tenant")
@@ -113,7 +171,7 @@ def tenant_portal():
         flash("Please sign in.", "error")
         return redirect(url_for("auth.login_form", mode="tenant"))
 
-    tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
     if err:
         flash(err, "error")
         return redirect(url_for("auth.login_form", mode="tenant"))
@@ -128,3 +186,163 @@ def tenant_portal():
         coverage_grid=coverage_grid,
         next_payment_due=next_due,
     )
+
+@bp.get("/tenant/pay")
+def pay():
+    email = _current_tenant_email()
+    if not email:
+        flash("Please sign in.", "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    rent = _rent_amount_for_tenant(tenant, properties)
+    if not rent or rent <= 0:
+        flash("Rent amount is not configured for this property.", "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    next_due = compute_next_payment_due(tenant, tenant_receipts)
+    due_ym = _next_due_month_ym(next_due)
+    if not due_ym:
+        flash("No payment due (lease may be fully covered or missing dates).", "info")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    due_month_start = dt.datetime(next_due.year, next_due.month, 1)
+    now_local = dt.datetime.now()  # simplest for now; swap to a configured tz later if you want
+    policy = _payment_policy(now_local, due_month_start, rent)
+
+    return render_template(
+        "rental_tenant/pay.html",
+        tenant=tenant,
+        properties=properties,
+        next_payment_due=next_due,
+        due_ym=due_ym,
+        rent=rent,
+        policy=policy,
+    )
+
+
+@bp.post("/tenant/pay/create-checkout-session")
+def create_checkout_session():
+    email = _current_tenant_email()
+    if not email:
+        flash("Please sign in.", "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    rent = _rent_amount_for_tenant(tenant, properties)
+    if not rent or rent <= 0:
+        flash("Rent amount is not configured for this property.", "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    next_due = compute_next_payment_due(tenant, tenant_receipts)
+    if not next_due:
+        flash("No payment due.", "info")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    due_ym = _next_due_month_ym(next_due)
+    due_month_start = dt.datetime(next_due.year, next_due.month, 1)
+    now_local = dt.datetime.now()
+    policy = _payment_policy(now_local, due_month_start, rent)
+
+    # Amount selection:
+    # - If allow_partial, read optional "amount" from form; else force full total_due
+    amount = policy["total_due"]
+    if policy["allow_partial"]:
+        amt_raw = (request.form.get("amount") or "").strip()
+        if amt_raw:
+            try:
+                amt = float(amt_raw)
+            except Exception:
+                amt = 0.0
+            if amt <= 0:
+                flash("Enter a valid payment amount.", "error")
+                return redirect(url_for("rental_tenant.pay"))
+            if amt > policy["total_due"]:
+                flash(f"Amount can’t exceed ${policy['total_due']:.2f}.", "error")
+                return redirect(url_for("rental_tenant.pay"))
+            amount = round(amt, 2)
+
+    if policy["require_full"] and abs(amount - policy["total_due"]) > 0.009:
+        flash(f"Full payment of ${policy['total_due']:.2f} is required right now.", "error")
+        return redirect(url_for("rental_tenant.pay"))
+
+    # Stripe init
+    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    app_base = os.environ.get("APP_BASE_URL", "").rstrip("/")
+    if not app_base:
+        raise RuntimeError("APP_BASE_URL is not set")
+
+    owner_user_id = entry["owner_user_id"]
+    tenant_id = entry["tenant_id"]
+    property_id = (tenant or {}).get("property_id") or ""
+
+    # Line items: rent (+ optional late fee) OR single "Rent payment" for partials
+    line_items = []
+    if policy["allow_partial"] and amount < policy["total_due"]:
+        line_items = [{
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": f"Rent payment (partial) — {due_ym}"},
+                "unit_amount": _money_to_cents(amount),
+            },
+            "quantity": 1,
+        }]
+    else:
+        line_items = [{
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": f"Rent — {due_ym}"},
+                "unit_amount": _money_to_cents(rent),
+            },
+            "quantity": 1,
+        }]
+        if policy["late_fee"] > 0:
+            line_items.append({
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": "Late fee (5%)"},
+                    "unit_amount": _money_to_cents(policy["late_fee"]),
+                },
+                "quantity": 1,
+            })
+
+    checkout = stripe.checkout.Session.create(
+        mode="payment",
+        payment_method_types=["card"],
+        line_items=line_items,
+        success_url=f"{app_base}{url_for('rental_tenant.pay_success')}?sid={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{app_base}{url_for('rental_tenant.pay_cancel')}",
+        metadata={
+            "kind": "rent",
+            "owner_user_id": owner_user_id,
+            "tenant_id": tenant_id,
+            "property_id": property_id,
+            "covered_month": due_ym,
+            "rent_cents": str(_money_to_cents(rent)),
+            "late_fee_cents": str(_money_to_cents(policy["late_fee"])),
+            "paid_cents": str(_money_to_cents(amount)),
+            "policy_allow_partial": str(policy["allow_partial"]).lower(),
+            "policy_require_full": str(policy["require_full"]).lower(),
+        },
+    )
+
+    return redirect(checkout.url, code=303)
+
+
+@bp.get("/tenant/pay/success")
+def pay_success():
+    flash("Payment submitted. It may take a moment to appear in receipts.", "success")
+    return redirect(url_for("rental_tenant.tenant_portal"))
+
+@bp.get("/tenant/pay/cancel")
+def pay_cancel():
+    flash("Payment canceled.", "info")
+    return redirect(url_for("rental_tenant.tenant_portal"))

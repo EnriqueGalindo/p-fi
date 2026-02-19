@@ -214,8 +214,11 @@
                 {{ tenant.first_name }} {{ tenant.last_name }}
               </div>
             </div>
-            <p class="lead" style="margin-top:10px;">
-              View lease coverage month-by-month and access receipts.
+            <form method="POST" action="{{ url_for('rental_tenant.create_checkout_session') }}">
+                <button class="btn" type="submit">Make a payment</button>
+            </form>
+            <p class="lead muted" style="margin-top:.5rem;">
+                You’ll be redirected to Stripe to complete your payment.
             </p>
           </div>
 
