@@ -60,9 +60,7 @@ def create_app():
     from .blueprints.rental_admin import bp as rental_admin_bp
     from app.blueprints import rental_tenant
     from app.blueprints import rental_payments
-    from app.blueprints import stripe_webhook
 
-    
     app.register_blueprint(auth_bp)
     app.register_blueprint(ledger_bp)
     app.register_blueprint(onboarding_bp)
@@ -72,9 +70,6 @@ def create_app():
     app.register_blueprint(rental_admin_bp)
     app.register_blueprint(rental_tenant.bp)
     app.register_blueprint(rental_payments.bp)
-    app.register_blueprint(stripe_webhook.bp)
-
-
 
     return app
 
