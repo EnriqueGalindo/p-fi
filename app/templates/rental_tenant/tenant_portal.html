@@ -24,25 +24,47 @@
         <div class="stack">
 
           <div class="card">
-            <h1>Tenant portal</h1>
-            <div class="kpi" style="margin-top:10px;">
-              <div>
-                <div class="label">Next payment due on</div>
-                <div class="value">
-                  {{ next_payment_due.strftime("%b %d, %Y") if next_payment_due else "—" }}
-                </div>
-              </div>
-              <div class="pill">
-                {{ tenant.first_name }} {{ tenant.last_name }}
-              </div>
-            </div>
-            <form method="POST" action="{{ url_for('rental_tenant.create_checkout_session') }}">
-                <button class="btn" type="submit">Make a payment</button>
-            </form>
-            <p class="lead muted" style="margin-top:.5rem;">
-                You’ll be redirected to Stripe to complete your payment.
-            </p>
-          </div>
+  <h1>Tenant portal</h1>
+
+    <!-- KPI grid -->
+    <div style="
+        margin-top:12px;
+        display:grid;
+        grid-template-columns: 1fr auto;
+        column-gap:40px;
+        row-gap:4px;
+        align-items:end;
+    ">
+
+        <!-- LEFT: next payment -->
+        <div class="label">Next payment due on</div>
+        <div class="label" style="text-align:right;">Tenant</div>
+
+        <div class="value">
+            {{ next_payment_due.strftime("%b %d, %Y") if next_payment_due else "—" }}
+        </div>
+
+        <!-- RIGHT: tenant name -->
+        <div class="value" style="
+            text-align:right;
+            font-size:18px;
+            font-weight:700;
+            color:var(--muted);
+        ">
+            {{ tenant.first_name }} {{ tenant.last_name }}
+        </div>
+    </div>
+
+    <!-- CTA -->
+    <form method="POST" action="{{ url_for('rental_tenant.create_checkout_session') }}" style="margin-top:18px;">
+        <button class="btn" type="submit">Make a payment</button>
+    </form>
+
+    <p class="lead muted" style="margin-top:.5rem;">
+        You’ll be redirected to Stripe to complete your payment.
+    </p>
+    </div>
+
 
           <div class="card">
             <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
