@@ -37,11 +37,11 @@
       }
 
       .shell{
-        width:min(980px, 100%);
-        display:grid;
-        grid-template-columns: 1.1fr .9fr;
-        gap:22px;
+        width:min(900px, 100%);
+        margin:0 auto;
+        display:block;
       }
+
       @media (max-width: 860px){
         .shell{grid-template-columns:1fr}
       }
@@ -266,19 +266,6 @@
           {% endwith %}
         </div>
       </section>
-
-      <aside class="right">
-        <h2>What you can do</h2>
-        <ul>
-          <li>View lease coverage month-by-month</li>
-          <li>Access receipts (view + download)</li>
-          <li>Make payments (Stripe next)</li>
-        </ul>
-
-        <div class="badge">
-          {{ "Tenant portal" if m=='tenant' else "Owner portal" }}
-        </div>
-      </aside>
     </div>
   </body>
 </html>
