@@ -381,12 +381,6 @@ def month_range(start_ymd: str, end_ymd: str) -> list[str]:
     return out
 
 def build_coverage_grid(tenant: dict, tenant_receipts: dict) -> tuple[list[str], dict, list[dict]]:
-    """
-    Reproduces the inline logic in rental_admin.tenant_edit:
-      - lease_months
-      - coverage_map (month -> receipt dict)
-      - coverage_grid list used by the template
-    """
     lease = (tenant or {}).get("lease") or {}
     start = lease.get("start_date")
     end   = lease.get("end_date")
@@ -395,30 +389,54 @@ def build_coverage_grid(tenant: dict, tenant_receipts: dict) -> tuple[list[str],
     coverage_map: dict[str, dict] = {}
     coverage_grid: list[dict] = []
 
-    if start and end:
-        lease_months = month_range(start, end)
+    if not (start and end):
+        return lease_months, coverage_map, coverage_grid
 
-        for _, r in (tenant_receipts or {}).items():
-            if not isinstance(r, dict):
-                continue
-            m = (r.get("covered_month") or "").strip()
-            if not m:
-                continue
-            if (r.get("status") or "") == "NSF / returned":
-                continue
-            coverage_map.setdefault(m, r)
+    lease_months = month_range(start, end)
 
-        for ym in lease_months:
-            r = coverage_map.get(ym)
-            paid = bool(r)
-            coverage_grid.append({
-                "ym": ym,
-                "label": month_label(ym),
-                "paid": paid,
-                "status": (r.get("status") if r else "Not paid"),
-                "receipt_id": (r.get("receipt_id") if r else None),
-                "date_paid": (r.get("date_paid") if r else None),
-                "amount": (r.get("amount") if r else None),
-            })
+    def _rank_receipt(r: dict) -> tuple[int, int]:
+        """
+        Higher is better.
+        1) paid-in-full beats partial beats other
+        2) newer updated_at/created_at beats older
+        """
+        status = (r.get("status") or "").strip().lower()
+        if status == "paid in full":
+            s = 3
+        elif "partial" in status:
+            s = 2
+        elif status == "nsf / returned":
+            s = 0
+        else:
+            s = 1
+        ts = int(r.get("updated_at") or r.get("created_at") or 0)
+        return (s, ts)
+
+    # Pick best receipt per covered_month
+    for _, r in (tenant_receipts or {}).items():
+        if not isinstance(r, dict):
+            continue
+        m = (r.get("covered_month") or "").strip()
+        if not m:
+            continue
+        if (r.get("status") or "").strip() == "NSF / returned":
+            continue
+
+        prev = coverage_map.get(m)
+        if prev is None or _rank_receipt(r) > _rank_receipt(prev):
+            coverage_map[m] = r
+
+    for ym in lease_months:
+        r = coverage_map.get(ym)
+        covered = bool(r)  # covered means there is *some* receipt (partial or full)
+        coverage_grid.append({
+            "ym": ym,
+            "label": month_label(ym),
+            "paid": covered,  # keep your existing template behavior
+            "status": (r.get("status") if r else "Not paid"),
+            "receipt_id": (r.get("receipt_id") if r else None),
+            "date_paid": (r.get("date_paid") if r else None),
+            "amount": (r.get("amount") if r else None),
+        })
 
     return lease_months, coverage_map, coverage_grid

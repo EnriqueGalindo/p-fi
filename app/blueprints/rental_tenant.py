@@ -69,10 +69,14 @@ def _load_tenant_context_for_email(email: str):
     return entry, tenant, properties, tenant_receipts, coverage_grid, None
 
 
-def compute_next_payment_due(tenant: dict, tenant_receipts: dict, now_utc: dt.datetime | None = None) -> dt.date | None:
+def compute_next_payment_due(
+    tenant: dict,
+    tenant_receipts: dict,
+    now_utc: dt.datetime | None = None
+) -> dt.date | None:
     """
-    Next unpaid covered month within lease window.
-    Due date returned as YYYY-MM-01.
+    Next unpaid month within lease window.
+    A month is considered covered ONLY if there is a receipt with status "Paid in full".
     """
     if now_utc is None:
         now_utc = dt.datetime.utcnow().replace(microsecond=0)
@@ -90,12 +94,6 @@ def compute_next_payment_due(tenant: dict, tenant_receipts: dict, now_utc: dt.da
     if now_utc >= end_dt:
         return None
 
-    covered = set()
-    for _, r in (tenant_receipts or {}).items():
-        cm = (r or {}).get("covered_month")
-        if cm:
-            covered.add(cm)
-
     def ym(d: dt.datetime) -> str:
         return d.strftime("%Y-%m")
 
@@ -107,9 +105,23 @@ def compute_next_payment_due(tenant: dict, tenant_receipts: dict, now_utc: dt.da
             y, m = cur.year, cur.month
             cur = cur.replace(year=y + (m // 12), month=(m % 12) + 1)
 
+    # Covered months are ONLY those paid-in-full (ignore "Partial", ignore NSF/returned)
+    covered_full = set()
+    for _, r in (tenant_receipts or {}).items():
+        if not isinstance(r, dict):
+            continue
+        cm = (r.get("covered_month") or "").strip()
+        if not cm:
+            continue
+        status = (r.get("status") or "").strip().lower()
+        if status == "nsf / returned":
+            continue
+        if status == "paid in full":
+            covered_full.add(cm)
+
     search_start = max(now_utc.replace(day=1), start_dt.replace(day=1))
     for m_start in iter_months(search_start, end_dt):
-        if ym(m_start) not in covered:
+        if ym(m_start) not in covered_full:
             return m_start.date()
 
     return None
@@ -271,31 +283,45 @@ def create_checkout_session():
         return redirect(url_for("rental_tenant.tenant_portal"))
 
     due_ym = _next_due_month_ym(next_due)
+    if not due_ym:
+        flash("No payment due.", "info")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
     due_month_start = dt.datetime(next_due.year, next_due.month, 1)
     now_local = dt.datetime.now()
     policy = _payment_policy(now_local, due_month_start, rent)
 
+    # ----------------------------
     # Amount selection:
-    # - If allow_partial, read optional "amount" from form; else force full total_due
-    amount = policy["total_due"]
-    if policy["allow_partial"]:
-        amt_raw = (request.form.get("amount") or "").strip()
-        if amt_raw:
-            try:
-                amt = float(amt_raw)
-            except Exception:
-                amt = 0.0
-            if amt <= 0:
-                flash("Enter a valid payment amount.", "error")
-                return redirect(url_for("rental_tenant.pay"))
-            if amt > policy["total_due"]:
-                flash(f"Amount can’t exceed ${policy['total_due']:.2f}.", "error")
-                return redirect(url_for("rental_tenant.pay"))
-            amount = round(amt, 2)
+    #   - default: full amount due (rent + late fee if applicable)
+    #   - if allow_partial: only allow "half" OR "full"
+    #     (choose via form field: payment_choice=half|full)
+    # ----------------------------
+    total_due = float(policy["total_due"])
+    total_due_cents = _money_to_cents(total_due)
 
-    if policy["require_full"] and abs(amount - policy["total_due"]) > 0.009:
-        flash(f"Full payment of ${policy['total_due']:.2f} is required right now.", "error")
-        return redirect(url_for("rental_tenant.pay"))
+    payment_choice = (request.form.get("payment_choice") or "full").strip().lower()
+
+    # default to full
+    amount_cents = total_due_cents
+    payment_kind = "full"
+
+    if policy.get("allow_partial"):
+        if payment_choice == "half":
+            # half, rounded up to the nearest cent
+            amount_cents = (total_due_cents + 1) // 2
+            payment_kind = "half"
+        else:
+            amount_cents = total_due_cents
+            payment_kind = "full"
+
+    # if full required, force full regardless of form input
+    if policy.get("require_full"):
+        amount_cents = total_due_cents
+        payment_kind = "full"
+
+    # Convert back for display/metadata consistency
+    amount = _cents_to_money(amount_cents)
 
     # Stripe init
     stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
@@ -305,14 +331,18 @@ def create_checkout_session():
     tenant_id = entry["tenant_id"]
     property_id = (tenant or {}).get("property_id") or ""
 
-    # Line items: rent (+ optional late fee) OR single "Rent payment" for partials
+    # ----------------------------
+    # Line items:
+    #   - if early+half: single line item for half of total due
+    #   - else: rent + optional late fee split out (as before)
+    # ----------------------------
     line_items = []
-    if policy["allow_partial"] and amount < policy["total_due"]:
+    if policy.get("allow_partial") and payment_kind == "half":
         line_items = [{
             "price_data": {
                 "currency": "usd",
-                "product_data": {"name": f"Rent payment (partial) — {due_ym}"},
-                "unit_amount": _money_to_cents(amount),
+                "product_data": {"name": f"Rent payment (half) — {due_ym}"},
+                "unit_amount": amount_cents,
             },
             "quantity": 1,
         }]
@@ -325,12 +355,12 @@ def create_checkout_session():
             },
             "quantity": 1,
         }]
-        if policy["late_fee"] > 0:
+        if policy.get("late_fee", 0) > 0:
             line_items.append({
                 "price_data": {
                     "currency": "usd",
                     "product_data": {"name": "Late fee (5%)"},
-                    "unit_amount": _money_to_cents(policy["late_fee"]),
+                    "unit_amount": _money_to_cents(float(policy["late_fee"])),
                 },
                 "quantity": 1,
             })
@@ -341,6 +371,7 @@ def create_checkout_session():
         line_items=line_items,
         success_url=f"{app_base}{url_for('rental_tenant.pay_success')}?sid={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{app_base}{url_for('rental_tenant.pay_cancel')}",
+        client_reference_id=f"{tenant_id}:{due_ym}",
         metadata={
             "kind": "rent",
             "owner_user_id": owner_user_id,
@@ -348,15 +379,16 @@ def create_checkout_session():
             "property_id": property_id,
             "covered_month": due_ym,
             "rent_cents": str(_money_to_cents(rent)),
-            "late_fee_cents": str(_money_to_cents(policy["late_fee"])),
-            "paid_cents": str(_money_to_cents(amount)),
-            "policy_allow_partial": str(policy["allow_partial"]).lower(),
-            "policy_require_full": str(policy["require_full"]).lower(),
+            "late_fee_cents": str(_money_to_cents(float(policy.get("late_fee", 0.0)))),
+            "paid_cents": str(amount_cents),
+            "total_cents": str(total_due_cents),
+            "payment_kind": payment_kind,  # "full" or "half"
+            "policy_allow_partial": str(policy.get("allow_partial", False)).lower(),
+            "policy_require_full": str(policy.get("require_full", True)).lower(),
         },
     )
 
     return redirect(checkout.url, code=303)
-
 
 @bp.get("/tenant/pay/success")
 def pay_success():
