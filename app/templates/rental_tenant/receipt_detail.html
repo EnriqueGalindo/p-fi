@@ -1,20 +1,101 @@
-{% block content %}
-<div class="card" style="max-width:920px;">
-  <h1 style="margin-top:0;">Receipt</h1>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Receipt — gmoney rentals</title>
+    {% include "rental_tenant/_theme.html" %}
+  </head>
 
-  <table>
-    <tr><th>Covered Month</th><td>{{ receipt.covered_month }}</td></tr>
-    <tr><th>Date Paid</th><td>{{ receipt.date_paid }}</td></tr>
-    <tr><th>Amount</th><td>${{ "%.2f"|format(receipt.amount) }}</td></tr>
-    <tr><th>Status</th><td>{{ receipt.status }}</td></tr>
-    <tr><th>Method</th><td>{{ receipt.payment_method }}</td></tr>
-    <tr><th>Check #</th><td>{{ receipt.check_number or "—" }}</td></tr>
-  </table>
+  <body>
+    <div class="shell">
 
-  <div style="margin-top:1rem; display:flex; gap:.75rem;">
-    <a href="{{ url_for('rental_admin.receipt_view', receipt_id=receipt.receipt_id) }}" target="_blank">View</a>
-    <a href="{{ url_for('rental_admin.receipt_download', receipt_id=receipt.receipt_id) }}">Download</a>
-    <a href="{{ url_for('rental_admin.tenant_edit', tenant_id=receipt.tenant_id) }}">Back to tenant</a>
-  </div>
-</div>
-{% endblock %}
+      <!-- MAIN -->
+      <section class="panel">
+        <div class="brand">
+          <img src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="gmoney logo">
+          <div>
+            <div class="title">gmoney rentals</div>
+            <div class="subtitle">Receipts • Lease coverage • Payments</div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="kpi" style="align-items:flex-start;">
+              <div>
+                <div class="label">Receipt</div>
+                <div class="value" style="font-size:28px;">
+                  {{ receipt.covered_month or "—" }}
+                </div>
+                <p class="lead" style="margin-top:.25rem;">
+                  Paid {{ receipt.date_paid or "—" }} · {{ receipt.status or "—" }}
+                </p>
+              </div>
+
+              <div style="display:flex; gap:10px; align-items:center;">
+                <a class="btn" href="{{ url_for('rental_tenant.receipt_download', receipt_id=receipt.receipt_id) }}">Download</a>
+                <a class="pill" href="{{ url_for('rental_tenant.tenant_portal') }}">Back</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <table>
+              <tbody>
+                <tr>
+                  <th style="width:220px;">Covered month</th>
+                  <td>{{ receipt.covered_month or "—" }}</td>
+                </tr>
+                <tr>
+                  <th>Date paid</th>
+                  <td>{{ receipt.date_paid or "—" }}</td>
+                </tr>
+                <tr>
+                  <th>Amount</th>
+                  <td>${{ "%.2f"|format(receipt.amount or 0) }}</td>
+                </tr>
+                <tr>
+                  <th>Status</th>
+                  <td>{{ receipt.status or "—" }}</td>
+                </tr>
+                <tr>
+                  <th>Method</th>
+                  <td>{{ receipt.payment_method or "—" }}</td>
+                </tr>
+                <tr>
+                  <th>Check #</th>
+                  <td>{{ receipt.check_number or "—" }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT SIDEBAR -->
+      <aside class="panel" style="background: rgba(0,0,0,.18);">
+        <div style="font-weight:900; font-size:16px;">Receipt</div>
+
+        <div class="card" style="margin-top:12px;">
+          <div class="label">Tenant</div>
+          <div style="font-weight:900; margin-top:6px;">
+            {{ tenant.first_name }} {{ tenant.last_name }}
+          </div>
+          <div style="color:var(--muted); font-size:12px; margin-top:6px;">
+            {{ tenant.email or "—" }}
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <div class="label">Property</div>
+          {% set prop = properties.get(tenant.property_id) %}
+          <div style="font-weight:900; margin-top:6px;">
+            {{ prop.address if prop else "—" }}
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </body>
+</html>

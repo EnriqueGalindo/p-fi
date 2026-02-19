@@ -15,8 +15,7 @@ from flask import (
     url_for,
     flash,
     request,
-    abort,
-    make_response
+    Response
 )
 from ..services.utils import (
     tenant_directory_path,
@@ -373,27 +372,35 @@ def pay_cancel():
 # Tenant view and download receipts
 # =========================================================
 
-def _load_receipts_for_owner(owner_user_id: str) -> dict:
+def _load_receipt_for_tenant(entry: dict, receipt_id: str):
+    owner_user_id = entry.get("owner_user_id")
+    tenant_id = entry.get("tenant_id")
+    if not owner_user_id or not tenant_id:
+        return None, "Missing tenant directory info."
+
     path = f"profiles/{owner_user_id}/rentals/receipts.json"
-    return current_app.gcs.read_json(path) or {}
+    receipts = current_app.gcs.read_json(path) or {}
 
-def _get_tenant_receipt_or_404(entry: dict, receipt_id: str) -> dict:
-    """
-    Ensure the receipt exists AND belongs to the current tenant (not just any receipt).
-    """
-    owner_user_id = entry["owner_user_id"]
-    tenant_id = entry["tenant_id"]
-
-    receipts = _load_receipts_for_owner(owner_user_id)
     r = receipts.get(receipt_id)
+    if not r:
+        # fallback: search by embedded receipt_id
+        for rid, rr in receipts.items():
+            if isinstance(rr, dict) and rr.get("receipt_id") == receipt_id:
+                r = rr
+                receipt_id = rid
+                break
 
-    if not isinstance(r, dict):
-        abort(404)
+    if not r or not isinstance(r, dict):
+        return None, "Receipt not found."
 
     if (r.get("tenant_id") or "") != tenant_id:
-        abort(404)
+        return None, "Receipt not found."
 
-    return r
+    # normalize id for templates
+    r = dict(r)
+    r.setdefault("receipt_id", receipt_id)
+    return r, None
+
 
 
 @bp.get("/tenant/receipts/<receipt_id>")
@@ -408,27 +415,21 @@ def receipt_view(receipt_id: str):
         flash(err, "error")
         return redirect(url_for("auth.login_form", mode="tenant"))
 
-    receipt = _get_tenant_receipt_or_404(entry, receipt_id)
+    receipt, rerr = _load_receipt_for_tenant(entry, receipt_id)
+    if rerr:
+        flash(rerr, "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
 
-    # Optional: attach property for display convenience
-    prop_id = receipt.get("property_id") or (tenant or {}).get("property_id")
-    prop = (properties or {}).get(prop_id) or {}
-
-    # Reuse your existing template if you want, or make a tenant-specific one
     return render_template(
-        "rental_tenant/receipt_detail.html",   # create this (recommended)
-        receipt=receipt,
+        "rental_tenant/receipt_detail.html",
         tenant=tenant,
-        property=prop,
+        properties=properties,
+        receipt=receipt,
     )
 
 
 @bp.get("/tenant/receipts/<receipt_id>/download")
 def receipt_download(receipt_id: str):
-    """
-    MVP: if you have a stored PDF/bytes path, serve that.
-    Otherwise fall back to downloading a simple HTML receipt.
-    """
     email = _current_tenant_email()
     if not email:
         flash("Please sign in.", "error")
@@ -439,30 +440,27 @@ def receipt_download(receipt_id: str):
         flash(err, "error")
         return redirect(url_for("auth.login_form", mode="tenant"))
 
-    receipt = _get_tenant_receipt_or_404(entry, receipt_id)
+    receipt, rerr = _load_receipt_for_tenant(entry, receipt_id)
+    if rerr:
+        flash(rerr, "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
 
-    # If your receipts sometimes have an uploaded PDF path (like lease/receipt uploads):
-    file_path = receipt.get("file_path")
-    content_type = receipt.get("content_type") or "application/pdf"
-    file_name = receipt.get("file_name") or f"{receipt_id}.pdf"
-
-    if file_path:
-        data = current_app.gcs.read_bytes(file_path)  # assuming you have read_bytes
-        if not data:
-            abort(404)
-        resp = make_response(data)
-        resp.headers["Content-Type"] = content_type
-        resp.headers["Content-Disposition"] = f'attachment; filename="{file_name}"'
-        return resp
-
-    # Stripe-generated receipts: no file; download HTML snapshot
+    # Reuse your existing rent receipt HTML template (owner-safe, no auth assumptions)
     html = render_template(
-        "rental_tenant/receipt_download.html",  # create this simple printable HTML
+        "rental_tenant/receipt_download.html",
         receipt=receipt,
         tenant=tenant,
-        property=(properties or {}).get(receipt.get("property_id") or "") or {},
+        properties=properties,
     )
-    resp = make_response(html)
-    resp.headers["Content-Type"] = "text/html; charset=utf-8"
-    resp.headers["Content-Disposition"] = f'attachment; filename="{receipt_id}.html"'
-    return resp
+
+
+    # MVP: download as HTML file.
+    # If you already have PDF generation in rental_admin, swap this to return PDF bytes instead.
+    filename = f"rent_receipt_{receipt.get('covered_month','')}_{receipt_id}.html".replace("/", "_")
+    return Response(
+        html,
+        headers={
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
