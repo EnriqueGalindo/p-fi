@@ -1,0 +1,21 @@
+{% extends "base_rental.html" %}
+{% block content %}
+<div class="card" style="max-width:920px;">
+  <h1 style="margin-top:0;">Receipt</h1>
+
+  <table>
+    <tr><th>Covered Month</th><td>{{ receipt.covered_month }}</td></tr>
+    <tr><th>Date Paid</th><td>{{ receipt.date_paid }}</td></tr>
+    <tr><th>Amount</th><td>${{ "%.2f"|format(receipt.amount) }}</td></tr>
+    <tr><th>Status</th><td>{{ receipt.status }}</td></tr>
+    <tr><th>Method</th><td>{{ receipt.payment_method }}</td></tr>
+    <tr><th>Check #</th><td>{{ receipt.check_number or "—" }}</td></tr>
+  </table>
+
+  <div style="margin-top:1rem; display:flex; gap:.75rem;">
+    <a href="{{ url_for('rental_admin.receipt_view', receipt_id=receipt.receipt_id) }}" target="_blank">View</a>
+    <a href="{{ url_for('rental_admin.receipt_download', receipt_id=receipt.receipt_id) }}">Download</a>
+    <a href="{{ url_for('rental_admin.tenant_edit', tenant_id=receipt.tenant_id) }}">Back to tenant</a>
+  </div>
+</div>
+{% endblock %}
