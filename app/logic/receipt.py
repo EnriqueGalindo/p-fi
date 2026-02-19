@@ -37,6 +37,10 @@ def normalize_payment_status(status: str | None, *, strict: bool = False) -> str
 
         "partial": "Partial payment",
         "partially paid": "Partial payment",
+        "paid in full": "Paid in full",
+
+        "partial": "Partial payment",
+        "partial payment": "Partial payment",
 
         "overpaid": "Overpayment / credit",
         "overpayment": "Overpayment / credit",

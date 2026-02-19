@@ -92,15 +92,34 @@
 
                 <tr class="spacer-row"><td colspan="2">&nbsp;</td></tr>
 
+                {% if payment_status and "partial" in payment_status|lower %}
+                  <tr>
+                    <td colspan="2" valign="top">
+                      <div class="value" style="color:#555; font-size:16px;">
+                        This is a partial payment toward {{ month_covered }}. A receipt will be sent again when the remaining balance is paid.
+                      </div>
+                    </td>
+                  </tr>
+                  <tr class="spacer-row"><td colspan="2">&nbsp;</td></tr>
+                {% endif %}
+
                 <tr>
                   <td valign="top" width="50%" style="padding-right:12px;">
                     <div class="label">Payment Method</div>
                     <div class="value">{{ payment_method }}</div>
                   </td>
-                  <td valign="top" width="50%" style="padding-left:12px;">
-                    <div class="label">Check Number</div>
-                    <div class="value">{{ check_number or "—" }}</div>
-                  </td>
+
+                  {% if payment_method and payment_method|lower == "check" %}
+                    <td valign="top" width="50%" style="padding-left:12px;">
+                      <div class="label">Check Number</div>
+                      <div class="value">{{ check_number or "—" }}</div>
+                    </td>
+                  {% else %}
+                    <td valign="top" width="50%" style="padding-left:12px;">
+                      <div class="label">Transaction</div>
+                      <div class="value">Stripe</div>
+                    </td>
+                  {% endif %}
                 </tr>
               </table>
 
