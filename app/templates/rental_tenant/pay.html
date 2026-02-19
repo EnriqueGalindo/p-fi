@@ -11,52 +11,44 @@
   </p>
 
   <form method="POST"
-        action="{{ url_for('rental_tenant.create_checkout_session') }}"
-        style="display:grid; gap:.75rem; max-width:420px;">
+      action="{{ url_for('rental_tenant.create_checkout_session') }}"
+      style="display:grid; gap:.75rem; max-width:520px;">
 
-    {% if policy.allow_partial %}
-      <div class="muted" style="font-size:12px;">
-        You’re paying early. Choose a payment option:
+  {% if policy.allow_partial %}
+    <div class="muted" style="font-size:12px;">
+      You’re paying early — you can pay <b>half</b> now (to limit fees) or pay in full.
+    </div>
+
+    <label style="display:flex; gap:.6rem; align-items:flex-start;">
+      <input type="radio" name="payment_choice" value="half" checked>
+      <div>
+        <div style="font-weight:800;">Pay half now</div>
+        <div class="muted" style="font-size:12px;">
+          ${{ "%.2f"|format((policy.total_due / 2.0)) }} (rounded to cents)
+        </div>
       </div>
+    </label>
 
-      <div style="display:grid; gap:.5rem;">
-        <label style="display:flex; align-items:flex-start; gap:.5rem; cursor:pointer;">
-          <input type="radio" name="payment_choice" value="full" checked>
-          <span>
-            <b>Pay full</b>
-            <span class="muted" style="display:block; font-size:12px;">
-              ${{ "%.2f"|format(policy.total_due) }} total
-            </span>
-          </span>
-        </label>
-
-        <label style="display:flex; align-items:flex-start; gap:.5rem; cursor:pointer;">
-          <input type="radio" name="payment_choice" value="half">
-          <span>
-            <b>Pay half</b>
-            <span class="muted" style="display:block; font-size:12px;">
-              {# half rounded up to nearest cent #}
-              {% set total_cents = (policy.total_due * 100) | round(0, 'common') | int %}
-              {% set half_cents = ((total_cents + 1) // 2) %}
-              ${{ "%.2f"|format(half_cents / 100.0) }} now
-            </span>
-          </span>
-        </label>
+    <label style="display:flex; gap:.6rem; align-items:flex-start;">
+      <input type="radio" name="payment_choice" value="full">
+      <div>
+        <div style="font-weight:800;">Pay in full</div>
+        <div class="muted" style="font-size:12px;">
+          ${{ "%.2f"|format(policy.total_due) }}
+        </div>
       </div>
+    </label>
 
-      <div class="muted" style="font-size:12px;">
-        Half payments are only available before the due month begins.
-      </div>
+  {% else %}
+    <input type="hidden" name="payment_choice" value="full">
+    <div class="muted" style="font-size:12px;">
+      Full payment is required right now.
+    </div>
+  {% endif %}
 
-    {% else %}
-      <input type="hidden" name="payment_choice" value="full">
-      <div class="muted" style="font-size:12px;">
-        Full payment is required right now.
-      </div>
-    {% endif %}
+  <button class="btn" type="submit">Continue to Stripe</button>
+  <a class="pill" href="{{ url_for('rental_tenant.tenant_portal') }}" style="width:max-content;">Back</a>
+</form>
 
-    <button class="btn" type="submit">Continue to Stripe</button>
-    <a class="pill" href="{{ url_for('rental_tenant.tenant_portal') }}" style="width:max-content;">Back</a>
-  </form>
 </div>
 {% endblock %}

@@ -56,9 +56,8 @@
     </div>
 
     <!-- CTA -->
-    <form method="POST" action="{{ url_for('rental_tenant.create_checkout_session') }}" style="margin-top:18px;">
-        <button class="btn" type="submit">Make a payment</button>
-    </form>
+    <a class="btn" href="{{ url_for('rental_tenant.pay') }}">Make a payment</a>
+
 
     <p class="lead muted" style="margin-top:.5rem;">
         You’ll be redirected to Stripe to complete your payment.
@@ -159,8 +158,8 @@
             </div>
 
             <div class="gh-legend">
-            <span>Unpaid</span>
             <i class="gh-dot" style="background: rgba(255,255,255,.10);"></i>
+            <span>Unpaid</span>
 
             <i class="gh-dot" style="background: var(--partial);"></i>
             <span>Partial</span>
