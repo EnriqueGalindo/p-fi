@@ -152,6 +152,15 @@ def _payment_policy(now_local: dt.datetime, due_month_start: dt.datetime, rent: 
         "total_due": total_due,
     }
 
+def _app_base_url() -> str:
+    base = (os.environ.get("APP_BASE_URL") or "").strip()
+    if not base:
+        raise RuntimeError("APP_BASE_URL is not set")
+    if not (base.startswith("http://") or base.startswith("https://")):
+        base = "https://" + base
+    return base.rstrip("/")
+
+
 
 # ---- routes ------------------------------------------------------
 
@@ -267,9 +276,7 @@ def create_checkout_session():
 
     # Stripe init
     stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
-    app_base = os.environ.get("APP_BASE_URL", "").rstrip("/")
-    if not app_base:
-        raise RuntimeError("APP_BASE_URL is not set")
+    app_base = _app_base_url()
 
     owner_user_id = entry["owner_user_id"]
     tenant_id = entry["tenant_id"]
