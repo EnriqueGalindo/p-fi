@@ -31,50 +31,68 @@
           Total due now: <b>${{ "%.2f"|format(policy.total_due) }}</b>
         </p>
 
+        {% set has_partial = existing_receipt and (existing_receipt.status and "partial" in existing_receipt.status|lower) %}
+
         <form method="POST"
-              action="{{ url_for('rental_tenant.create_checkout_session') }}"
-              style="display:grid; gap:.9rem; max-width:420px; margin-top:12px;">
+            action="{{ url_for('rental_tenant.create_checkout_session') }}"
+            style="display:grid; gap:.75rem; max-width:520px;">
 
-          {% if policy.allow_partial %}
-            <div class="pill">You're paying early — choose an option</div>
+        {% if has_partial %}
+            <div class="pill" style="width:100%; justify-content:flex-start;">
+            Partial payment already received — remaining balance:
+            <b style="margin-left:6px;">${{ "%.2f"|format(remaining) }}</b>
+            </div>
 
-            <label style="display:flex; gap:.6rem; align-items:flex-start;">
-              <input type="radio" name="payment_choice" value="half" checked>
-              <div>
-                <div style="font-weight:800;">Pay half now</div>
-                <div class="lead" style="font-size:13px;">
-                  ${{ "%.2f"|format(policy.total_due / 2.0) }}
-                </div>
-              </div>
-            </label>
+            <input type="hidden" name="payment_choice" value="remainder">
 
-            <label style="display:flex; gap:.6rem; align-items:flex-start;">
-              <input type="radio" name="payment_choice" value="full">
-              <div>
-                <div style="font-weight:800;">Pay full amount</div>
-                <div class="lead" style="font-size:13px;">
-                  ${{ "%.2f"|format(policy.total_due) }}
-                </div>
-              </div>
-            </label>
-
-          {% else %}
-            <div class="pill">Full payment required</div>
-          {% endif %}
-
-          <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
-            <button class="btn" type="submit" style="min-width:220px;">
-                Continue to Stripe
+            <button class="btn" type="submit">
+            Pay remaining ${{ "%.2f"|format(remaining) }}
             </button>
 
-            <a href="{{ url_for('rental_tenant.tenant_portal') }}"
-                class="pill"
-                style="text-decoration:none; display:inline-flex; align-items:center;">
-                ← Back to portal
+            <a class="pill" href="{{ url_for('rental_tenant.tenant_portal') }}" style="width:max-content;">
+            ← Back to portal
             </a>
-          </div>
 
+        {% else %}
 
+            {% if policy.allow_partial %}
+            <div class="pill" style="width:100%; justify-content:flex-start;">
+                You're paying early — choose an option
+            </div>
+
+            <label style="display:flex; gap:.6rem; align-items:flex-start;">
+                <input type="radio" name="payment_choice" value="half" checked>
+                <div>
+                <div style="font-weight:900;">Pay half now</div>
+                <div class="muted" style="font-size:12px;">
+                    ${{ "%.2f"|format(policy.total_due / 2.0) }}
+                </div>
+                </div>
+            </label>
+
+            <label style="display:flex; gap:.6rem; align-items:flex-start;">
+                <input type="radio" name="payment_choice" value="full">
+                <div>
+                <div style="font-weight:900;">Pay full amount</div>
+                <div class="muted" style="font-size:12px;">
+                    ${{ "%.2f"|format(policy.total_due) }}
+                </div>
+                </div>
+            </label>
+
+            {% else %}
+            <div class="muted" style="font-size:12px;">
+                Full payment is required right now.
+            </div>
+            <input type="hidden" name="payment_choice" value="full">
+            {% endif %}
+
+            <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;">
+            <button class="btn" type="submit">Continue to Stripe</button>
+            <a class="pill" href="{{ url_for('rental_tenant.tenant_portal') }}">← Back to portal</a>
+            </div>
+
+        {% endif %}
         </form>
       </div>
 

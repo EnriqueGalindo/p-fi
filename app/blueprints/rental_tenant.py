@@ -1,5 +1,6 @@
 # app/blueprints/rental_tenant.py
 from __future__ import annotations
+from email import policy
 import os
 import uuid
 import stripe
@@ -187,6 +188,23 @@ def _app_base_url() -> str:
         base = "https://" + base
     return base.rstrip("/")
 
+def _find_stripe_receipt_for_month(tenant_receipts: dict, tenant_id: str, covered_month: str) -> dict | None:
+    if not tenant_receipts or not tenant_id or not covered_month:
+        return None
+
+    for _, r in tenant_receipts.items():
+        if not isinstance(r, dict):
+            continue
+        if r.get("tenant_id") != tenant_id:
+            continue
+        if r.get("covered_month") != covered_month:
+            continue
+        if (r.get("payment_method") or "") != "Stripe":
+            continue
+        return r
+
+    return None
+
 
 
 # ---- routes ------------------------------------------------------
@@ -249,16 +267,31 @@ def pay():
     now_local = dt.datetime.now()  # simplest for now; swap to a configured tz later if you want
     policy = _payment_policy(now_local, due_month_start, rent)
 
+    # existing receipt for this month? (partial scenario)
+    existing = _find_stripe_receipt_for_month(tenant_receipts, entry["tenant_id"], due_ym)
+
+    already_paid = 0.0
+    existing_status = (existing.get("status") or "").lower() if existing else ""
+    if existing and "partial" in existing_status:
+        already_paid = float(existing.get("amount") or 0.0)
+
+    remaining = max(0.0, float(policy["total_due"]) - already_paid)
+
+    # If remaining is 0, this month is effectively covered (or data mismatch),
+    # so you can redirect to portal or recompute due.
+    if existing and "partial" in existing_status and remaining <= 0.009:
+        flash("This month is already fully covered.", "info")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
     return render_template(
         "rental_tenant/pay.html",
-        tenant=tenant,
-        properties=properties,
-        next_payment_due=next_due,
         due_ym=due_ym,
         rent=rent,
         policy=policy,
+        existing_receipt=existing,
+        already_paid=already_paid,
+        remaining=round(remaining, 2),
     )
-
 
 @bp.post("/tenant/pay/create-checkout-session")
 def create_checkout_session():
@@ -293,51 +326,96 @@ def create_checkout_session():
 
     # ----------------------------
     # Amount selection:
-    #   - default: full amount due (rent + late fee if applicable)
-    #   - if allow_partial: only allow "half" OR "full"
-    #     (choose via form field: payment_choice=half|full)
+    #   - If a Stripe "Partial" receipt already exists for due_ym:
+    #       force "remainder" only (pay what's left)
+    #   - Else:
+    #       keep your existing early rules (half/full) + require_full override
     # ----------------------------
     total_due = float(policy["total_due"])
     total_due_cents = _money_to_cents(total_due)
-
-    payment_choice = (request.form.get("payment_choice") or "full").strip().lower()
-
-    # default to full
-    amount_cents = total_due_cents
-    payment_kind = "full"
-
-    if policy.get("allow_partial"):
-        if payment_choice == "half":
-            # half, rounded up to the nearest cent
-            amount_cents = (total_due_cents + 1) // 2
-            payment_kind = "half"
-        else:
-            amount_cents = total_due_cents
-            payment_kind = "full"
-
-    # if full required, force full regardless of form input
-    if policy.get("require_full"):
-        amount_cents = total_due_cents
-        payment_kind = "full"
-
-    # Convert back for display/metadata consistency
-    amount = _cents_to_money(amount_cents)
-
-    # Stripe init
-    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
-    app_base = _app_base_url()
 
     owner_user_id = entry["owner_user_id"]
     tenant_id = entry["tenant_id"]
     property_id = (tenant or {}).get("property_id") or ""
 
+    def _find_stripe_receipt_for_month(tenant_receipts: dict, tenant_id: str, covered_month: str) -> dict | None:
+        if not tenant_receipts or not tenant_id or not covered_month:
+            return None
+        for _, r in tenant_receipts.items():
+            if not isinstance(r, dict):
+                continue
+            if r.get("tenant_id") != tenant_id:
+                continue
+            if r.get("covered_month") != covered_month:
+                continue
+            if (r.get("payment_method") or "") != "Stripe":
+                continue
+            return r
+        return None
+
+    existing = _find_stripe_receipt_for_month(tenant_receipts, tenant_id, due_ym)
+    existing_status = ((existing or {}).get("status") or "").strip().lower()
+
+    already_paid_cents = 0
+    if existing and ("partial" in existing_status):
+        try:
+            already_paid_cents = _money_to_cents(float(existing.get("amount") or 0.0))
+        except Exception:
+            already_paid_cents = 0
+
+    remaining_cents = max(0, total_due_cents - already_paid_cents)
+
+    payment_choice = (request.form.get("payment_choice") or "full").strip().lower()
+
+    # default
+    amount_cents = total_due_cents
+    payment_kind = "full"
+
+    # If partial exists, force remainder regardless of client input
+    if already_paid_cents > 0 and remaining_cents > 0:
+        amount_cents = remaining_cents
+        payment_kind = "remainder"
+    else:
+        # keep your existing logic
+        if policy.get("allow_partial"):
+            if payment_choice == "half":
+                amount_cents = (total_due_cents + 1) // 2  # rounded up to nearest cent
+                payment_kind = "half"
+            else:
+                amount_cents = total_due_cents
+                payment_kind = "full"
+
+        if policy.get("require_full"):
+            amount_cents = total_due_cents
+            payment_kind = "full"
+
+    if amount_cents <= 0:
+        flash("No payment due.", "info")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    # Stripe init
+    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    app_base = _app_base_url()
+
     # ----------------------------
     # Line items:
-    #   - if early+half: single line item for half of total due
+    #   - if remainder: single line item (remaining balance)
+    #   - if early+half: single line item (half)
     #   - else: rent + optional late fee split out (as before)
     # ----------------------------
     line_items = []
-    if policy.get("allow_partial") and payment_kind == "half":
+
+    if payment_kind == "remainder":
+        line_items = [{
+            "price_data": {
+                "currency": "usd",
+                "product_data": {"name": f"Rent payment (remaining balance) — {due_ym}"},
+                "unit_amount": amount_cents,
+            },
+            "quantity": 1,
+        }]
+
+    elif policy.get("allow_partial") and payment_kind == "half":
         line_items = [{
             "price_data": {
                 "currency": "usd",
@@ -346,6 +424,7 @@ def create_checkout_session():
             },
             "quantity": 1,
         }]
+
     else:
         line_items = [{
             "price_data": {
@@ -380,11 +459,16 @@ def create_checkout_session():
             "covered_month": due_ym,
             "rent_cents": str(_money_to_cents(rent)),
             "late_fee_cents": str(_money_to_cents(float(policy.get("late_fee", 0.0)))),
+            # IMPORTANT: paid_cents = THIS checkout session amount (half/full/remainder)
             "paid_cents": str(amount_cents),
+            # IMPORTANT: total_cents = what it takes to fully cover the month (rent + late fee if applicable)
             "total_cents": str(total_due_cents),
-            "payment_kind": payment_kind,  # "full" or "half"
+            "payment_kind": payment_kind,  # "full" | "half" | "remainder"
             "policy_allow_partial": str(policy.get("allow_partial", False)).lower(),
             "policy_require_full": str(policy.get("require_full", True)).lower(),
+            # Helpful for debugging partials:
+            "already_paid_cents": str(already_paid_cents),
+            "remaining_cents": str(remaining_cents),
         },
     )
 
