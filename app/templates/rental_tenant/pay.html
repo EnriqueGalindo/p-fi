@@ -1,54 +1,74 @@
-{% extends "base_rental.html" %}
-{% block content %}
-<div class="card" style="max-width:900px;">
-  <h1 style="margin-top:0;">Make a payment</h1>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Make a payment — gmoney rentals</title>
 
-  <p class="muted">
-    Covered month: <b>{{ due_ym }}</b><br>
-    Base rent: <b>${{ "%.2f"|format(rent) }}</b><br>
-    Late fee: <b>${{ "%.2f"|format(policy.late_fee) }}</b><br>
-    Total due now: <b>${{ "%.2f"|format(policy.total_due) }}</b>
-  </p>
+  {% include "rental_tenant/_theme.html" %}
+</head>
 
-  <form method="POST"
-      action="{{ url_for('rental_tenant.create_checkout_session') }}"
-      style="display:grid; gap:.75rem; max-width:520px;">
+<body>
+  <div class="shell">
 
-  {% if policy.allow_partial %}
-    <div class="muted" style="font-size:12px;">
-      You’re paying early — you can pay <b>half</b> now (to limit fees) or pay in full.
-    </div>
+    <section class="panel">
 
-    <label style="display:flex; gap:.6rem; align-items:flex-start;">
-      <input type="radio" name="payment_choice" value="half" checked>
-      <div>
-        <div style="font-weight:800;">Pay half now</div>
-        <div class="muted" style="font-size:12px;">
-          ${{ "%.2f"|format((policy.total_due / 2.0)) }} (rounded to cents)
+      <div class="brand">
+        <img src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="gmoney logo">
+        <div>
+          <div class="title">gmoney rentals</div>
+          <div class="subtitle">Payments</div>
         </div>
       </div>
-    </label>
 
-    <label style="display:flex; gap:.6rem; align-items:flex-start;">
-      <input type="radio" name="payment_choice" value="full">
-      <div>
-        <div style="font-weight:800;">Pay in full</div>
-        <div class="muted" style="font-size:12px;">
-          ${{ "%.2f"|format(policy.total_due) }}
-        </div>
+      <div class="card">
+        <h1 style="margin-top:0;">Make a payment</h1>
+
+        <p class="lead">
+          Covered month: <b>{{ due_ym }}</b><br>
+          Base rent: <b>${{ "%.2f"|format(rent) }}</b><br>
+          Late fee: <b>${{ "%.2f"|format(policy.late_fee) }}</b><br>
+          Total due now: <b>${{ "%.2f"|format(policy.total_due) }}</b>
+        </p>
+
+        <form method="POST"
+              action="{{ url_for('rental_tenant.create_checkout_session') }}"
+              style="display:grid; gap:.9rem; max-width:420px; margin-top:12px;">
+
+          {% if policy.allow_partial %}
+            <div class="pill">You're paying early — choose an option</div>
+
+            <label style="display:flex; gap:.6rem; align-items:flex-start;">
+              <input type="radio" name="payment_choice" value="half" checked>
+              <div>
+                <div style="font-weight:800;">Pay half now</div>
+                <div class="lead" style="font-size:13px;">
+                  ${{ "%.2f"|format(policy.total_due / 2.0) }}
+                </div>
+              </div>
+            </label>
+
+            <label style="display:flex; gap:.6rem; align-items:flex-start;">
+              <input type="radio" name="payment_choice" value="full">
+              <div>
+                <div style="font-weight:800;">Pay full amount</div>
+                <div class="lead" style="font-size:13px;">
+                  ${{ "%.2f"|format(policy.total_due) }}
+                </div>
+              </div>
+            </label>
+
+          {% else %}
+            <div class="pill">Full payment required</div>
+          {% endif %}
+
+          <button class="btn" type="submit">Continue to Stripe</button>
+
+        </form>
       </div>
-    </label>
 
-  {% else %}
-    <input type="hidden" name="payment_choice" value="full">
-    <div class="muted" style="font-size:12px;">
-      Full payment is required right now.
-    </div>
-  {% endif %}
+    </section>
 
-  <button class="btn" type="submit">Continue to Stripe</button>
-  <a class="pill" href="{{ url_for('rental_tenant.tenant_portal') }}" style="width:max-content;">Back</a>
-</form>
-
-</div>
-{% endblock %}
+  </div>
+</body>
+</html>
