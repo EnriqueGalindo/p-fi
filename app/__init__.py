@@ -1,7 +1,5 @@
 import os
 import time
-from app.blueprints import rental_payments
-from app.blueprints.stripe import stripe_webhook
 from flask import Flask, session
 from .services.gcs import GcsStore
 from .services.utils import user_id_for_email, canonicalize_email
@@ -56,12 +54,12 @@ def create_app():
     from .blueprints.ledger      import bp as ledger_bp
     from .blueprints.auth        import bp as auth_bp
     from .blueprints.ledger_upload import bp as ledger_upload
-    from app.blueprints.receipt import bp as receipts_bp
+    from .blueprints.receipt import bp as receipts_bp
     from .blueprints.rental_admin import bp as rental_admin_bp
-    from app.blueprints import rental_tenant
-    from app.blueprints import stripe_webhook
 
-    
+    from .blueprints.rental_tenant import bp as rental_tenant_bp
+    from .blueprints.stripe import bp as stripe_webhook_bp
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(ledger_bp)
     app.register_blueprint(onboarding_bp)
@@ -69,10 +67,9 @@ def create_app():
     app.register_blueprint(ledger_upload)
     app.register_blueprint(receipts_bp)
     app.register_blueprint(rental_admin_bp)
-    app.register_blueprint(rental_tenant.bp)
-    app.register_blueprint(stripe_webhook.bp)
 
-
+    app.register_blueprint(rental_tenant_bp)
+    app.register_blueprint(stripe_webhook_bp)
 
     return app
 
