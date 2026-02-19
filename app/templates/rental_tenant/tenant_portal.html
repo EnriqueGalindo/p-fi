@@ -63,11 +63,11 @@
                 <div class="label">Signed lease</div>
                 <div style="margin-top:4px;">
                   {% if tenant.lease and tenant.lease.file_name %}
-                    <a href="{{ url_for('rental_admin.tenant_lease_view', tenant_id=tenant.tenant_id) }}" target="_blank">
+                    <a href="{{ url_for('rental_tenant.lease_view') }}" target="_blank">
                       View
                     </a>
                     &nbsp;•&nbsp;
-                    <a href="{{ url_for('rental_admin.tenant_lease_download', tenant_id=tenant.tenant_id) }}">
+                    <a href="{{ url_for('rental_tenant.lease_download') }}">
                       Download
                     </a>
                   {% else %}

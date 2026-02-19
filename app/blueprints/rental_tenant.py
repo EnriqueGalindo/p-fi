@@ -469,3 +469,83 @@ def receipt_download(receipt_id: str):
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+# =========================================================
+# Tenant view and download lease agreement
+# =========================================================
+
+def _load_lease_for_tenant(entry: dict, tenant: dict):
+    """
+    Validate tenant owns lease and return lease metadata.
+    """
+    lease = (tenant or {}).get("lease") or {}
+
+    if not lease.get("file_name"):
+        return None, "No lease on file."
+
+    return lease, None
+
+
+@bp.get("/tenant/lease")
+def lease_view():
+    email = _current_tenant_email()
+    if not email:
+        flash("Please sign in.", "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    lease, lerr = _load_lease_for_tenant(entry, tenant)
+    if lerr:
+        flash(lerr, "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    owner_user_id = entry["owner_user_id"]
+    tenant_id = entry["tenant_id"]
+
+    lease_path = f"profiles/{owner_user_id}/rentals/leases/{tenant_id}/{lease['file_name']}"
+
+    blob = current_app.gcs.bucket.blob(lease_path)
+    if not blob.exists():
+        flash("Lease file not found.", "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    return redirect(blob.generate_signed_url(expiration=300))
+
+
+@bp.get("/tenant/lease/download")
+def lease_download():
+    email = _current_tenant_email()
+    if not email:
+        flash("Please sign in.", "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    lease, lerr = _load_lease_for_tenant(entry, tenant)
+    if lerr:
+        flash(lerr, "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    owner_user_id = entry["owner_user_id"]
+    tenant_id = entry["tenant_id"]
+
+    lease_path = f"profiles/{owner_user_id}/rentals/leases/{tenant_id}/{lease['file_name']}"
+
+    blob = current_app.gcs.bucket.blob(lease_path)
+    if not blob.exists():
+        flash("Lease file not found.", "error")
+        return redirect(url_for("rental_tenant.tenant_portal"))
+
+    url = blob.generate_signed_url(
+        expiration=300,
+        response_disposition=f'attachment; filename="{lease["file_name"]}"'
+    )
+
+    return redirect(url)
