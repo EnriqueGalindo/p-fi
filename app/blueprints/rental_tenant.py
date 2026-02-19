@@ -17,30 +17,22 @@ def _current_tenant_email() -> str | None:
     return (session.get("user_email") or "").strip().lower() or None
 
 def _load_tenant_context_for_email(email: str):
-    """
-    Resolve tenant via your global tenant directory, then load:
-      - tenant record (from owner's rentals/tenants.json)
-      - properties.json (same owner)
-      - receipts for that tenant (however you already do it in rental_admin)
-      - coverage_grid (reuse your existing generator)
-    """
-    # 1) lookup global tenant directory entry (you already write this on tenant add)
-    dir_path = tenant_directory_path(email)  # <-- you already have this helper
+    # 1) lookup global tenant directory entry
+    dir_path = tenant_directory_path(email)
     entry = current_app.config_store.read_json(dir_path)
+
     if not entry or not entry.get("active"):
-        return None, None, None, None, "Email not recognized as an active tenant."
+        return None, None, None, None, None, "Email not recognized as an active tenant."
 
     owner_user_id = entry.get("owner_user_id")
     tenant_id = entry.get("tenant_id")
     if not owner_user_id or not tenant_id:
-        return None, None, None, None, "Tenant directory entry is missing owner_user_id or tenant_id."
+        return None, None, None, None, None, "Tenant directory entry is missing owner_user_id or tenant_id."
 
     # 2) load owner’s rentals data
-    # These should match whatever your rental_admin uses internally.
-    # If you already have helpers like _load_tenants_for_user(owner_user_id) use them instead.
-    tenants_path = f"profiles/{owner_user_id}/rentals/tenants.json"
-    props_path   = f"profiles/{owner_user_id}/rentals/properties.json"
-    receipts_path = f"profiles/{owner_user_id}/rentals/receipts.json"  # adjust if different
+    tenants_path  = f"profiles/{owner_user_id}/rentals/tenants.json"
+    props_path    = f"profiles/{owner_user_id}/rentals/properties.json"
+    receipts_path = f"profiles/{owner_user_id}/rentals/receipts.json"
 
     tenants = current_app.gcs.read_json(tenants_path) or {}
     properties = current_app.gcs.read_json(props_path) or {}
@@ -48,7 +40,7 @@ def _load_tenant_context_for_email(email: str):
 
     tenant = tenants.get(tenant_id)
     if not tenant:
-        return None, None, None, None, "Tenant record not found."
+        return None, None, None, None, None, "Tenant record not found."
 
     # 3) filter receipts to tenant
     tenant_receipts = {
@@ -56,8 +48,7 @@ def _load_tenant_context_for_email(email: str):
         if (r or {}).get("tenant_id") == tenant_id
     }
 
-    # 4) coverage grid (reuse your existing function if you have one)
-    # If you already generate coverage_grid in rental_admin.tenant_edit, call that same helper.
+    # 4) coverage grid
     lease_months, coverage_map, coverage_grid = build_coverage_grid(tenant, tenant_receipts)
 
     return entry, tenant, properties, tenant_receipts, coverage_grid, None
