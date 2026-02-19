@@ -54,7 +54,7 @@ def _load_tenant_context_for_email(email: str):
 
     # 4) coverage grid (reuse your existing function if you have one)
     # If you already generate coverage_grid in rental_admin.tenant_edit, call that same helper.
-    coverage_grid = build_coverage_grid(tenant, tenant_receipts)  # <-- implement or reuse existing
+    lease_months, coverage_map, coverage_grid = build_coverage_grid(tenant, tenant_receipts)
 
     return tenant, properties, tenant_receipts, coverage_grid, None
 
