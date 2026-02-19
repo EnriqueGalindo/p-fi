@@ -1,6 +1,6 @@
 import os
 import time
-from flask import Flask, session
+from flask import Flask, session, send_from_directory
 from .services.gcs import GcsStore
 from .services.utils import user_id_for_email, canonicalize_email
 
@@ -75,3 +75,12 @@ def create_app():
 
 # expose a module-level app for Gunicorn/Flask
 app = create_app()
+
+@app.get("/favicon.ico")
+def favicon():
+    return send_from_directory(
+        app.static_folder + "/img",
+        "logo.jpeg",
+        mimetype="image/jpeg"
+    )
+
