@@ -74,7 +74,20 @@
         border:1px solid var(--line);
         background: rgba(0,0,0,.22);
       }
-      .stack{ display:grid; gap:14px; }
+      .stack{
+        display:flex;
+        flex-direction:column;
+        gap:14px;
+      }
+
+      .panel, .card { min-width: 0; }
+
+      @media (max-width: 640px){
+        body{ padding:16px 14px; }
+        .panel{ padding:18px; border-radius:16px; }
+        .card{ padding:16px; border-radius:14px; }
+      }
+
 
       h1{
         margin:0 0 6px;
