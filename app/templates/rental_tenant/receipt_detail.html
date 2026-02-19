@@ -5,10 +5,21 @@
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <title>Receipt — gmoney rentals</title>
     {% include "rental_tenant/_theme.html" %}
+    <style>
+      .shell--two-col{
+        width:min(1100px, 100%);
+        display:grid;
+        grid-template-columns: 1.35fr .65fr;
+        gap:22px;
+      }
+      @media (max-width: 980px){
+        .shell--two-col{ grid-template-columns: 1fr; }
+      }
+    </style>
   </head>
 
   <body>
-    <div class="shell">
+    <div class="shell shell--two-col">
 
       <!-- MAIN -->
       <section class="panel">
