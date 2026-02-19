@@ -4,9 +4,25 @@ import os
 import uuid
 import stripe
 
+import io
 import datetime as dt
-from flask import Blueprint, current_app, render_template, session, redirect, url_for, flash, request
-from ..services.utils import tenant_directory_path, parse_ymd, build_coverage_grid
+from flask import (
+    Blueprint,
+    current_app,
+    render_template,
+    session,
+    redirect,
+    url_for,
+    flash,
+    request,
+    abort,
+    make_response
+)
+from ..services.utils import (
+    tenant_directory_path,
+    parse_ymd,
+    build_coverage_grid
+)
 
 
 bp = Blueprint("rental_tenant", __name__)
@@ -164,6 +180,10 @@ def _app_base_url() -> str:
 
 # ---- routes ------------------------------------------------------
 
+# =========================================================
+# Tenant landing portal: view lease, receipts, coverage grid, and next payment due
+# =========================================================
+
 @bp.get("/tenant")
 def tenant_portal():
     email = _current_tenant_email()
@@ -186,6 +206,10 @@ def tenant_portal():
         coverage_grid=coverage_grid,
         next_payment_due=next_due,
     )
+
+# =========================================================
+# Tenant payment portal: view and pay rent
+# =========================================================
 
 @bp.get("/tenant/pay")
 def pay():
@@ -344,3 +368,101 @@ def pay_success():
 def pay_cancel():
     flash("Payment canceled.", "info")
     return redirect(url_for("rental_tenant.tenant_portal"))
+
+# =========================================================
+# Tenant view and download receipts
+# =========================================================
+
+def _load_receipts_for_owner(owner_user_id: str) -> dict:
+    path = f"profiles/{owner_user_id}/rentals/receipts.json"
+    return current_app.gcs.read_json(path) or {}
+
+def _get_tenant_receipt_or_404(entry: dict, receipt_id: str) -> dict:
+    """
+    Ensure the receipt exists AND belongs to the current tenant (not just any receipt).
+    """
+    owner_user_id = entry["owner_user_id"]
+    tenant_id = entry["tenant_id"]
+
+    receipts = _load_receipts_for_owner(owner_user_id)
+    r = receipts.get(receipt_id)
+
+    if not isinstance(r, dict):
+        abort(404)
+
+    if (r.get("tenant_id") or "") != tenant_id:
+        abort(404)
+
+    return r
+
+
+@bp.get("/tenant/receipts/<receipt_id>")
+def receipt_view(receipt_id: str):
+    email = _current_tenant_email()
+    if not email:
+        flash("Please sign in.", "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    receipt = _get_tenant_receipt_or_404(entry, receipt_id)
+
+    # Optional: attach property for display convenience
+    prop_id = receipt.get("property_id") or (tenant or {}).get("property_id")
+    prop = (properties or {}).get(prop_id) or {}
+
+    # Reuse your existing template if you want, or make a tenant-specific one
+    return render_template(
+        "rental_tenant/receipt_detail.html",   # create this (recommended)
+        receipt=receipt,
+        tenant=tenant,
+        property=prop,
+    )
+
+
+@bp.get("/tenant/receipts/<receipt_id>/download")
+def receipt_download(receipt_id: str):
+    """
+    MVP: if you have a stored PDF/bytes path, serve that.
+    Otherwise fall back to downloading a simple HTML receipt.
+    """
+    email = _current_tenant_email()
+    if not email:
+        flash("Please sign in.", "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    entry, tenant, properties, tenant_receipts, coverage_grid, err = _load_tenant_context_for_email(email)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("auth.login_form", mode="tenant"))
+
+    receipt = _get_tenant_receipt_or_404(entry, receipt_id)
+
+    # If your receipts sometimes have an uploaded PDF path (like lease/receipt uploads):
+    file_path = receipt.get("file_path")
+    content_type = receipt.get("content_type") or "application/pdf"
+    file_name = receipt.get("file_name") or f"{receipt_id}.pdf"
+
+    if file_path:
+        data = current_app.gcs.read_bytes(file_path)  # assuming you have read_bytes
+        if not data:
+            abort(404)
+        resp = make_response(data)
+        resp.headers["Content-Type"] = content_type
+        resp.headers["Content-Disposition"] = f'attachment; filename="{file_name}"'
+        return resp
+
+    # Stripe-generated receipts: no file; download HTML snapshot
+    html = render_template(
+        "rental_tenant/receipt_download.html",  # create this simple printable HTML
+        receipt=receipt,
+        tenant=tenant,
+        property=(properties or {}).get(receipt.get("property_id") or "") or {},
+    )
+    resp = make_response(html)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{receipt_id}.html"'
+    return resp

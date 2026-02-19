@@ -331,18 +331,12 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for rid, r in tenant_receipts.items() %}
-                    <tr>
-                      <td>{{ r.covered_month }}</td>
-                      <td>${{ "%.2f"|format(r.amount) }}</td>
-                      <td>{{ r.status }}</td>
-                      <td>
-                        <a href="{{ url_for('rental_admin.receipt_view', receipt_id=r.receipt_id) }}" target="_blank">View</a>
+                    {% for rid, r in tenant_receipts.items() %}
+                        {% set receipt_id = r.receipt_id or rid %}
+                        <a href="{{ url_for('rental_tenant.receipt_view', receipt_id=receipt_id) }}" target="_blank">View</a>
                         &nbsp;|&nbsp;
-                        <a href="{{ url_for('rental_admin.receipt_download', receipt_id=r.receipt_id) }}">Download</a>
-                      </td>
-                    </tr>
-                  {% endfor %}
+                        <a href="{{ url_for('rental_tenant.receipt_download', receipt_id=receipt_id) }}">Download</a>
+                    {% endfor %}
                 </tbody>
               </table>
             {% else %}
