@@ -26,25 +26,25 @@
           <div class="card">
   <h1>Tenant portal</h1>
 
-<!-- KPI grid -->
+    <!-- KPI grid -->
     <div style="
         margin-top:12px;
         display:grid;
         grid-template-columns: 1fr auto;
         column-gap:40px;
-        row-gap:4px;
-        align-items:end;
+        row-gap:6px;
+        align-items:start;   /* <-- was end */
     ">
 
-        <!-- LEFT: next payment -->
+        <!-- Row 1: labels -->
         <div class="label">Next payment due on</div>
         <div class="label" style="text-align:right;">Tenant</div>
 
+        <!-- Row 2: values -->
         <div class="value">
             {{ next_payment_due.strftime("%b %d, %Y") if next_payment_due else "—" }}
         </div>
 
-        <!-- RIGHT: tenant name -->
         <div class="value" style="
             text-align:right;
             font-size:18px;
@@ -54,20 +54,19 @@
             {{ tenant.first_name }} {{ tenant.last_name }}
         </div>
 
-        <!-- CTA (LEFT column) -->
+        <!-- Row 3: CTA under LEFT column -->
         <div style="grid-column:1; margin-top:10px;">
             <a class="btn" href="{{ url_for('rental_tenant.pay') }}">Make a payment</a>
 
-            <p class="lead muted" style="margin-top:.5rem;">
+            <p class="lead muted" style="margin-top:.6rem;">
                 You’ll be redirected to Stripe to complete your payment.
             </p>
         </div>
 
-        <!-- empty cell to preserve grid structure -->
+        <!-- Row 3 right cell placeholder (keeps grid from “pulling” CTA into col 2) -->
         <div></div>
 
     </div>
-
           <div class="card">
             <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;">
               <div>
