@@ -199,11 +199,37 @@ def _find_stripe_receipt_for_month(tenant_receipts: dict, tenant_id: str, covere
             continue
         if r.get("covered_month") != covered_month:
             continue
-        if (r.get("payment_method") or "") != "Stripe":
-            continue
         return r
 
     return None
+
+def _paid_so_far_cents_for_month(tenant_receipts: dict, tenant_id: str, covered_month: str) -> int:
+    if not tenant_receipts or not tenant_id or not covered_month:
+        return 0
+
+    total = 0
+    for _, r in tenant_receipts.items():
+        if not isinstance(r, dict):
+            continue
+        if (r.get("tenant_id") or "") != tenant_id:
+            continue
+        if (r.get("covered_month") or "") != covered_month:
+            continue
+
+        status = (r.get("status") or "").strip().lower()
+        if "nsf" in status or "returned" in status:
+            continue
+
+        # If you only want to count partials, you can require "partial" here.
+        # But for remainder math, counting ALL payments is usually correct.
+        try:
+            amt = float(r.get("amount") or 0.0)
+        except Exception:
+            amt = 0.0
+
+        total += _money_to_cents(amt)
+
+    return max(0, total)
 
 
 
@@ -356,7 +382,8 @@ def create_checkout_session():
     existing = _find_stripe_receipt_for_month(tenant_receipts, tenant_id, due_ym)
     existing_status = ((existing or {}).get("status") or "").strip().lower()
 
-    already_paid_cents = 0
+    already_paid_cents = _paid_so_far_cents_for_month(tenant_receipts, tenant_id, due_ym)
+    remaining_cents = max(0, total_due_cents - already_paid_cents)
     if existing and ("partial" in existing_status):
         try:
             already_paid_cents = _money_to_cents(float(existing.get("amount") or 0.0))
@@ -516,7 +543,6 @@ def _load_receipt_for_tenant(entry: dict, receipt_id: str):
     r = dict(r)
     r.setdefault("receipt_id", receipt_id)
     return r, None
-
 
 
 @bp.get("/tenant/receipts/<receipt_id>")
