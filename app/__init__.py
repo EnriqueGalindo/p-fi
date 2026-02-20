@@ -1,10 +1,17 @@
 import os
 import time
-from flask import Flask, session, send_from_directory, redirect, url_for
+from flask import (
+    Flask,
+    session,
+    send_from_directory,
+    redirect,
+    url_for,
+    request
+)
 from .services.gcs import GcsStore
 from .services.utils import user_id_for_email, canonicalize_email
 
-
+SESSION_IDLE_SECONDS = 20 * 60  # 20 minutes
 
 def create_app():
     app = Flask(__name__)
@@ -74,6 +81,26 @@ def create_app():
     @app.get("/")
     def root():
         return redirect(url_for("auth.login_form"))
+    
+    @app.before_request
+    def _idle_session_timeout():
+        # Skip static + auth endpoints so login/logout still work.
+        endpoint = (request.endpoint or "")
+        if endpoint.startswith("static") or endpoint.startswith("auth."):
+            return
+
+        # Only enforce if logged in
+        auth_at = session.get("auth_at")
+        if not auth_at:
+            return
+
+        now = int(time.time())
+        if now - int(auth_at) > SESSION_IDLE_SECONDS:
+            session.clear()
+            return redirect(url_for("auth.login_form"))
+
+        # Sliding window: bump activity timestamp on each request
+        session["auth_at"] = now
 
     return app
 

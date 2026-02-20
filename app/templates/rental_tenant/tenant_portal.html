@@ -6,6 +6,18 @@
     <title>Tenant portal — gmoney rentals</title>
 
     {% include "rental_tenant/_theme.html" %}
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+    <div class="brand">
+        <img src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="gmoney logo">
+        <div>
+        <div class="title">gmoney rentals</div>
+        <div class="subtitle">Receipts • Lease coverage • Payments</div>
+        </div>
+    </div>
+
+    <a class="pill" href="{{ url_for('auth.logout') }}">Logout</a>
+</div>
   </head>
 
   <body>
