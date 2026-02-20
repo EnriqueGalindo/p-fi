@@ -71,15 +71,15 @@ def create_app():
     app.register_blueprint(rental_tenant_bp)
     app.register_blueprint(stripe_webhook_bp)
 
+    @app.get("/")
+    def root():
+        return redirect(url_for("auth.login_form"))
+
     return app
 
 # expose a module-level app for Gunicorn/Flask
 app = create_app()
 
-
-@app.route("/")
-def root():
-    return redirect(url_for("auth.login_form"))
 
 @app.get("/favicon.ico")
 def favicon():
